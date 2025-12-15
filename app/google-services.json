@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1002662831596",
+    "project_id": "forestanimalsgame",
+    "storage_bucket": "forestanimalsgame.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1002662831596:android:5cf00fb4fad5b92b75ccc9",
+        "android_client_info": {
+          "package_name": "it.sapienza.forestanimalsgame"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1002662831596-cpq61pr91o6pko03s84apg7fh8qd9c7q.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "it.sapienza.forestanimalsgame",
+            "certificate_hash": "efea0940186c3c0637b26177b986473b57f45c4a"
+          }
+        },
+        {
+          "client_id": "1002662831596-paq2f1i6dl63qnmpdqt0gp0sp34qo36t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoYaTV_bV4878SjkJHr9gbcZi14ATJMc0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1002662831596-paq2f1i6dl63qnmpdqt0gp0sp34qo36t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
