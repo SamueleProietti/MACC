@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "1002662831596-iv10obdf5dgdh2kca2hg7p8n1uisb30r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "it.sapienza.forestanimalsgame",
+            "certificate_hash": "2fb9ff82a6272f0a395b4d387ad20e12e69da391"
+          }
+        },
+        {
           "client_id": "1002662831596-paq2f1i6dl63qnmpdqt0gp0sp34qo36t.apps.googleusercontent.com",
           "client_type": 3
         }

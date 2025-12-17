@@ -4,10 +4,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -107,6 +116,27 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun HomeScreen(
+    user: FirebaseUser,
+    onLogout: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text("Benvenuto, ${user.displayName ?: "giocatore"}")
+        Text(user.email ?: "", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onLogout) {
+            Text("Logout")
+        }
+    }
+}
+
+@Composable
 fun LoginScreen(
     errorMessage: String?,
     onSignInClick: () -> Unit
@@ -130,27 +160,6 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
-        }
-    }
-}
-
-@Composable
-fun HomeScreen(
-    user: FirebaseUser,
-    onLogout: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start
-    ) {
-        Text("Benvenuto, ${user.displayName ?: "giocatore"}")
-        Text(user.email ?: "", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onLogout) {
-            Text("Logout")
         }
     }
 }
