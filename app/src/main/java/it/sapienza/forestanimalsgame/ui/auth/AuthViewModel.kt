@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import android.util.Log
 
 class AuthViewModel() : ViewModel() {
 
@@ -33,6 +34,14 @@ class AuthViewModel() : ViewModel() {
                 isLoading = false
                 if (task.isSuccessful) {
                     currentUser = firebaseAuth.currentUser
+                    //  Firebase ID token (quello da usare come Bearer nel backend)
+                    firebaseAuth.currentUser?.getIdToken(true)
+                        ?.addOnSuccessListener { result ->
+                            Log.d("FIREBASE_ID_TOKEN", result.token ?: "null")
+                        }
+                        ?.addOnFailureListener { e ->
+                            Log.e("FIREBASE_ID_TOKEN", "Failed to get token", e)
+                        }
                 } else {
                     currentUser = null
                     errorMessage =

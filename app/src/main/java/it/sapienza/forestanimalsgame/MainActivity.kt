@@ -1,6 +1,7 @@
 package it.sapienza.forestanimalsgame
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -29,6 +30,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseUser
 import it.sapienza.forestanimalsgame.ui.auth.AuthViewModel
 import it.sapienza.forestanimalsgame.ui.theme.ForestAnimalsGameTheme
+import it.sapienza.forestanimalsgame.ui.register.RegisterActivity
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -75,7 +77,10 @@ class MainActivity : ComponentActivity() {
                         else -> {
                             HomeScreen(
                                 user = currentUser,
-                                onLogout = { authViewModel.logout() }
+                                onLogout = { authViewModel.logout() },
+                                onCompleteProfile = {
+                                    startActivity(Intent(this, RegisterActivity::class.java))
+                                }
                             )
                         }
                     }
@@ -119,6 +124,7 @@ class MainActivity : ComponentActivity() {
 fun HomeScreen(
     user: FirebaseUser,
     onLogout: () -> Unit
+    onCompleteProfile: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -129,10 +135,9 @@ fun HomeScreen(
     ) {
         Text("Benvenuto, ${user.displayName ?: "giocatore"}")
         Text(user.email ?: "", style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = onCompleteProfile) { Text("Completa profilo") }
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onLogout) {
-            Text("Logout")
-        }
+        Button(onClick = onLogout) { Text("Logout") }
     }
 }
 

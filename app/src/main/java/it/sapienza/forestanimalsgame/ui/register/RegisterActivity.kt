@@ -19,6 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -84,6 +86,11 @@ fun RegisterScreen(
     val location by viewModel.location.observeAsState(null)
     val photo by viewModel.photo.observeAsState(null)
     val error by viewModel.error.observeAsState(null)
+    val done by viewModel.done.observeAsState(false)
+    LaunchedEffect(done) {
+        if (done) finish()
+    }
+
 
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Registrazione", style = MaterialTheme.typography.headlineMedium)
@@ -98,12 +105,21 @@ fun RegisterScreen(
         Spacer(Modifier.height(8.dp))
         Text("Foto: " + (if (photo != null) "OK" else "manca"))
 
+        photo?.let {
+            Spacer(Modifier.height(12.dp))
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = "Foto profilo"
+            )
+        }
+
         if (!error.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
             Text(error!!, color = MaterialTheme.colorScheme.error)
         }
 
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onRegister) { Text("Completa registrazione") }
+        Button(onClick = onRegister, enabled = !loading) { Text(if (loading) "Salvataggio..." else "Completa registrazione") }
+
     }
 }

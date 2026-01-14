@@ -62,6 +62,12 @@ dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
     implementation("com.google.firebase:firebase-auth-ktx:23.2.1")
+    implementation("com.google.firebase:firebase-storage-ktx")
+
+    implementation("com.squareup.retrofit2:retrofit:...")
+    implementation("com.squareup.retrofit2:converter-moshi:...") // oppure gson
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:...")
 
     // Credential Manager + Google ID
     implementation("androidx.credentials:credentials:1.3.0")
