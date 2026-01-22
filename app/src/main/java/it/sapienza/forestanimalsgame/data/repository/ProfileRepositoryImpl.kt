@@ -1,3 +1,15 @@
+package it.sapienza.forestanimalsgame.data.repository
+
+import android.graphics.Bitmap
+import android.location.Location
+import com.google.firebase.storage.FirebaseStorage
+import it.sapienza.forestanimalsgame.data.remote.api.ApiClient
+import it.sapienza.forestanimalsgame.data.remote.api.ProfileApi
+import it.sapienza.forestanimalsgame.data.remote.api.ProfileUpsertRequest
+import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository
+import kotlinx.coroutines.tasks.await
+import java.io.ByteArrayOutputStream
+
 class ProfileRepositoryImpl(
     private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
     private val api: ProfileApi = ApiClient.profileApi

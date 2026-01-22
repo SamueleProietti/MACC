@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,12 +16,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.dp
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -61,6 +62,7 @@ class RegisterActivity : ComponentActivity() {
                 onTakePhoto = { cameraLauncher.launch(null) },
                 onRefreshLocation = { fetchLocation() },
                 onRegister = { viewModel.completeRegistration() },
+                onFinish = { finish() },
                 viewModel = viewModel
             )
         }
@@ -81,16 +83,18 @@ fun RegisterScreen(
     onTakePhoto: () -> Unit,
     onRefreshLocation: () -> Unit,
     onRegister: () -> Unit,
+    onFinish: () -> Unit,
     viewModel: RegisterViewModel
 ) {
     val location by viewModel.location.observeAsState(null)
     val photo by viewModel.photo.observeAsState(null)
     val error by viewModel.error.observeAsState(null)
+    val loading by viewModel.loading.observeAsState(false)
     val done by viewModel.done.observeAsState(false)
-    LaunchedEffect(done) {
-        if (done) finish()
-    }
 
+    LaunchedEffect(done) {
+        if (done) onFinish()
+    }
 
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Registrazione", style = MaterialTheme.typography.headlineMedium)
@@ -119,7 +123,8 @@ fun RegisterScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onRegister, enabled = !loading) { Text(if (loading) "Salvataggio..." else "Completa registrazione") }
-
+        Button(onClick = onRegister, enabled = !loading) {
+            Text(if (loading) "Salvataggio..." else "Completa registrazione")
+        }
     }
 }

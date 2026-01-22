@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HomeScreen(
     user: FirebaseUser,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
     onCompleteProfile: () -> Unit
 ) {
     Column(

@@ -2,19 +2,17 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
+    alias(libs.plugins.google.services)
 }
 
 android {
     namespace = "it.sapienza.forestanimalsgame"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "it.sapienza.forestanimalsgame"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -52,6 +50,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.runtime:runtime-livedata:1.6.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -59,20 +58,26 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
     // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
-    implementation("com.google.firebase:firebase-auth-ktx:23.2.1")
-    implementation("com.google.firebase:firebase-storage-ktx")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.storage)
 
-    implementation("com.squareup.retrofit2:retrofit:...")
-    implementation("com.squareup.retrofit2:converter-moshi:...") // oppure gson
+    // Networking
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.moshi)
+    implementation(libs.moshi.kotlin)
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:...")
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Credential Manager + Google ID
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.0")
 
-    // Google Play Services Location (per ottenere il GPS)
-    implementation("com.google.android.gms:play-services-location:21.3.0") // o la versione che Android Studio ti suggerisce
+    // Google Play Services Location
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    implementation(libs.play.services.location)
 }

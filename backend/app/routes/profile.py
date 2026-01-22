@@ -4,7 +4,7 @@ from sqlalchemy import select
 from ..db import get_session
 from ..models import UserProfile
 from ..auth import require_auth
-from ..services.storage import save_profile_photo
+from ..services.storage import upload_profile_photo
 
 bp = Blueprint("profile", __name__)
 
@@ -71,7 +71,7 @@ def upload_profile_photo():
     if file.filename == "":
         return jsonify(error="empty_filename"), 400
 
-    photo_url = save_profile_photo(uid, file)
+    photo_url = upload_profile_photo(uid, file)
 
     with get_session() as db:
         prof = db.execute(

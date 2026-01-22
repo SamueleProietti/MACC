@@ -1,26 +1,39 @@
 import os
 import uuid
+from datetime import timedelta
 
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
+from google.cloud import storage
 
-def save_profile_photo(uid: str, file_storage) -> str:
+GCS_BUCKET = os.getenv("GCS_BUCKET", "")
+GCS_PUBLIC = os.getenv("GCS_PUBLIC", "false").lower() == "true"
+
+def upload_profile_photo(uid: str, file_storage) -> str:
     """
-    DEV ONLY: salva nel filesystem del container.
-    Ritorna una 'URL' finta che useremo per ora come riferimento.
-    In Step 5 lo sostituiamo con upload su Google Cloud Storage e URL reale.
+    Upload su Google Cloud Storage.
+    Ritorna un URL utilizzabile dall'app:
+    - Se GCS_PUBLIC=true: URL pubblico
+    - Altrimenti: signed URL (temporaneo)
     """
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    if not GCS_BUCKET:
+        raise RuntimeError("GCS_BUCKET env var is missing")
 
-    # estensione (best-effort)
+    client = storage.Client()
+    bucket = client.bucket(GCS_BUCKET)
+
     filename = file_storage.filename or "photo.jpg"
     ext = os.path.splitext(filename)[1].lower()
     if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
         ext = ".jpg"
 
-    out_name = f"{uid}_{uuid.uuid4().hex}{ext}"
-    out_path = os.path.join(UPLOAD_DIR, out_name)
+    object_name = f"users/{uid}/profile_{uuid.uuid4().hex}{ext}"
+    blob = bucket.blob(object_name)
 
-    file_storage.save(out_path)
+    content_type = file_storage.mimetype or "application/octet-stream"
+    blob.upload_from_file(file_storage.stream, content_type=content_type)
 
-    # "URL" dev (non pubblico): giusto per salvarlo nel DB e testare il flusso
-    return f"local://uploads/{out_name}"
+    if GCS_PUBLIC:
+        blob.make_public()
+        return blob.public_url
+
+    # Signed URL (1 ora): va bene per demo e privacy
+    return blob.generate_signed_url(expiration=timedelta(hours=1), method="GET")

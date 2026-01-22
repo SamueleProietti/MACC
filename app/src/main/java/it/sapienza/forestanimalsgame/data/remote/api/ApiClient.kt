@@ -1,3 +1,8 @@
+package it.sapienza.forestanimalsgame.data.remote.api
+
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
+
 object ApiClient {
     private const val BASE_URL = "https://<VOSTRO_SERVER>/"
 

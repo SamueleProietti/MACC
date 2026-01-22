@@ -1,3 +1,8 @@
+package it.sapienza.forestanimalsgame.data.remote.api
+
+import retrofit2.http.Body
+import retrofit2.http.POST
+
 data class ProfileUpsertRequest(
     val uid: String,
     val lat: Double,
