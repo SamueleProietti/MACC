@@ -10,12 +10,10 @@ def create_app():
     # init db + create tables (per dev)
     engine = init_db()
 
-    from . import models  # noqa: F401 (importa i modelli)
-
-    with engine.begin() as conn:
-        conn.execute(text("SELECT pg_advisory_lock(424242)"))
-        Base.metadata.create_all(bind=conn)
-        conn.execute(text("SELECT pg_advisory_unlock(424242)"))
+    # ⚠️ crea tabelle SOLO quando lo chiedi esplicitamente
+    if os.getenv("AUTO_CREATE_TABLES", "false").lower() == "true":
+        from . import models  # importa i modelli
+        Base.metadata.create_all(bind=engine)
 
     #Base.metadata.create_all(bind=engine)
 
