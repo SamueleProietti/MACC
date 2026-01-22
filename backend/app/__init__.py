@@ -9,8 +9,15 @@ def create_app():
 
     # init db + create tables (per dev)
     engine = init_db()
+
     from . import models  # noqa: F401 (importa i modelli)
-    Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_lock(424242)"))
+        Base.metadata.create_all(bind=conn)
+        conn.execute(text("SELECT pg_advisory_unlock(424242)"))
+
+    #Base.metadata.create_all(bind=engine)
 
     app.register_blueprint(health_bp)
     app.register_blueprint(profile_bp, url_prefix="/v1")
