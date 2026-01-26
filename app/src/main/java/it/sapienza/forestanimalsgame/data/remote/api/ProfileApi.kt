@@ -1,16 +1,31 @@
 package it.sapienza.forestanimalsgame.data.remote.api
 
-import retrofit2.http.Body
-import retrofit2.http.POST
+import okhttp3.MultipartBody
+import retrofit2.http.*
 
-data class ProfileUpsertRequest(
-    val uid: String,
+data class ProfileMeUpsertRequest(
+    val nickname: String? = null,
     val lat: Double,
     val lng: Double,
+    val photoUrl: String? = null
+)
+
+data class PhotoUploadResponse(
     val photoUrl: String
 )
 
 interface ProfileApi {
-    @POST("profiles/upsert")
-    suspend fun upsertProfile(@Body req: ProfileUpsertRequest)
+
+    @Multipart
+    @POST("v1/profile/me/photo")
+    suspend fun uploadProfilePhoto(
+        @Header("Authorization") bearer: String,
+        @Part photo: MultipartBody.Part
+    ): PhotoUploadResponse
+
+    @PUT("v1/profile/me")
+    suspend fun upsertProfileMe(
+        @Header("Authorization") bearer: String,
+        @Body req: ProfileMeUpsertRequest
+    )
 }

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from ..db import get_session
 from ..models import UserProfile
 from ..auth import require_auth
-from ..services.storage import upload_profile_photo
+from ..services.storage import upload_profile_photo as upload_profile_photo_to_gcs  # ✅ alias per evitare collisione
 
 bp = Blueprint("profile", __name__)
 
@@ -40,6 +40,7 @@ def upsert_profile_me():
     nickname = body.get("nickname")
     lat = body.get("lat")
     lng = body.get("lng")
+    photo_url = body.get("photoUrl")  # ✅ opzionale: se vuoi salvarla anche da qui
 
     with get_session() as db:
         prof = db.execute(
@@ -50,28 +51,35 @@ def upsert_profile_me():
             prof = UserProfile(firebase_uid=uid)
             db.add(prof)
 
-        # aggiorna campi
-        prof.nickname = nickname
-        prof.last_lat = lat
-        prof.last_lng = lng
+        # aggiorna campi (se None, lasciamo com’è)
+        if nickname is not None:
+            prof.nickname = nickname
+        if lat is not None:
+            prof.last_lat = lat
+        if lng is not None:
+            prof.last_lng = lng
+        if photo_url is not None:
+            prof.photo_url = photo_url
 
         db.commit()
 
     return jsonify(status="ok"), 200
 
+
 @bp.post("/profile/me/photo")
 @require_auth
-def upload_profile_photo():
+def upload_profile_me_photo():  # ✅ rinominata per evitare collisione
     uid = g.uid
 
     if "photo" not in request.files:
         return jsonify(error="missing_file_field_photo"), 400
 
     file = request.files["photo"]
-    if file.filename == "":
+    if not file or file.filename == "":
         return jsonify(error="empty_filename"), 400
 
-    photo_url = upload_profile_photo(uid, file)
+    # ✅ chiamiamo la funzione di storage (alias), NON la route
+    photo_url = upload_profile_photo_to_gcs(uid, file)
 
     with get_session() as db:
         prof = db.execute(
@@ -86,4 +94,3 @@ def upload_profile_photo():
         db.commit()
 
     return jsonify(photoUrl=photo_url), 201
-

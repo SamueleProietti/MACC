@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -47,17 +48,13 @@ fun LobbyEntryScreen(viewModel: LobbyViewModel) {
                 onClick = { viewModel.createSession() },
                 enabled = !loading,
                 modifier = Modifier.weight(1f)
-            ) {
-                Text("Crea sessione")
-            }
+            ) { Text("Crea sessione") }
 
             Button(
                 onClick = { viewModel.joinSession(code) },
                 enabled = !loading,
                 modifier = Modifier.weight(1f)
-            ) {
-                Text("Entra")
-            }
+            ) { Text("Entra") }
         }
 
         if (loading) {
@@ -65,10 +62,7 @@ fun LobbyEntryScreen(viewModel: LobbyViewModel) {
         }
 
         if (!error.isNullOrBlank()) {
-            Text(
-                text = error!!,
-                color = MaterialTheme.colorScheme.error
-            )
+            Text(text = error!!, color = MaterialTheme.colorScheme.error)
         }
 
         Spacer(Modifier.height(6.dp))
@@ -97,33 +91,35 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text("Sessione", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(sessionId, style = MaterialTheme.typography.bodySmall)
-                Text("Stato: ${session?.status ?: "..." }", style = MaterialTheme.typography.bodySmall)
-            }
-
-            OutlinedButton(onClick = { viewModel.leaveSession() }) {
-                Text("Esci")
+        // Header (no tonalElevation: uso shadowElevation)
+        Surface(shadowElevation = 2.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Sessione", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(sessionId, style = MaterialTheme.typography.bodySmall)
+                    Text("Stato: ${session?.status ?: "..."}", style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedButton(onClick = { viewModel.leaveSession() }) {
+                    Text("Esci")
+                }
             }
         }
 
-        // Membri
         MembersCard(session)
 
-        // Chat
         Text("Chat", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .weight(1f),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             if (messages.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -143,7 +139,6 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
             }
         }
 
-        // Input chat
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -162,12 +157,9 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
                     messageText = ""
                 },
                 enabled = messageText.isNotBlank()
-            ) {
-                Text("Invia")
-            }
+            ) { Text("Invia") }
         }
 
-        // Start
         Button(
             onClick = { viewModel.startGameIfHost() },
             enabled = canStart,
@@ -184,7 +176,10 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
 
 @Composable
 private fun MembersCard(session: Session?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Membri (${session?.members?.size ?: 0}/4)", fontWeight = FontWeight.Bold)
             val members: List<Member> = session?.members ?: emptyList()
@@ -219,8 +214,9 @@ private fun ChatBubble(msg: ChatMessage, currentUid: String?) {
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold
         )
+
         Surface(
-            tonalElevation = 2.dp,
+            shadowElevation = 1.dp,
             shape = MaterialTheme.shapes.medium
         ) {
             Text(

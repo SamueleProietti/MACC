@@ -12,12 +12,11 @@ def create_app():
 
     # ⚠️ crea tabelle SOLO quando lo chiedi esplicitamente
     if os.getenv("AUTO_CREATE_TABLES", "false").lower() == "true":
-        from . import models  # importa i modelli
+        from . import models
         Base.metadata.create_all(bind=engine)
-
-    #Base.metadata.create_all(bind=engine)
 
     app.register_blueprint(health_bp)
     app.register_blueprint(profile_bp, url_prefix="/v1")
+
     os.makedirs("/app/uploads", exist_ok=True)
     return app

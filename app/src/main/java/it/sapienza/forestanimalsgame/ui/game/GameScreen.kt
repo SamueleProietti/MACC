@@ -39,11 +39,17 @@ fun GameScreen(
     onLeave: () -> Unit
 ) {
     val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "unknown" }
-
-    // posizione iniziale deterministica per l’utente corrente
     val spawn = remember(currentUid) { uidToSpawn(currentUid) }
 
-    // posizione avatar locale (placeholder: solo locale)
+    // ---- IMPORTANT: prendo i colori qui (in contesto @Composable), NON dentro Canvas ----
+    val scheme = MaterialTheme.colorScheme
+    val bgColor = scheme.surfaceVariant
+    val treeColor = scheme.primary.copy(alpha = 0.35f)
+    val questNormal = scheme.tertiary
+    val questActive = scheme.error
+    val questDone = scheme.secondary
+
+    // movimento (placeholder locale)
     var avatar by rememberSaveable { mutableStateOf(spawn) }
     var target by rememberSaveable { mutableStateOf(spawn) }
 
@@ -52,7 +58,6 @@ fun GameScreen(
     var activeQuestId by rememberSaveable { mutableStateOf<String?>(null) }
     var completed by rememberSaveable { mutableStateOf(setOf<String>()) }
 
-    // “spot” quest (placeholder fissi)
     val questSpots = remember {
         listOf(
             QuestSpot(
@@ -79,7 +84,7 @@ fun GameScreen(
         )
     }
 
-    // semplice animazione: avvicina avatar al target
+    // animazione verso target
     LaunchedEffect(target) {
         repeat(40) {
             val dx = target.x - avatar.x
@@ -95,8 +100,8 @@ fun GameScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Top bar
-        Surface(tonalElevation = 2.dp) {
+        // Top bar (NO tonalElevation, usa shadowElevation o niente)
+        Surface(shadowElevation = 2.dp) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -139,14 +144,14 @@ fun GameScreen(
                         }
                     }
             ) {
-                // background "forest"
+                // background
                 drawRect(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = bgColor,
                     topLeft = Offset(0f, 0f),
                     size = Size(size.width, size.height)
                 )
 
-                // “alberi” placeholder
+                // alberi placeholder
                 val trees = listOf(
                     Offset(100f, 120f),
                     Offset(650f, 150f),
@@ -156,21 +161,21 @@ fun GameScreen(
                 )
                 trees.forEach {
                     drawCircle(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        color = treeColor,
                         radius = 55f,
                         center = it
                     )
                 }
 
-                // quest spots
+                // quest spots (cambio stile se completata/attiva)
                 questSpots.forEach { spot ->
                     val isCompleted = completed.contains(spot.id)
                     val isActive = (activeQuestId == spot.id)
 
                     val base = when {
-                        isCompleted -> MaterialTheme.colorScheme.secondary
-                        isActive -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.tertiary
+                        isCompleted -> questDone
+                        isActive -> questActive
+                        else -> questNormal
                     }
 
                     drawCircle(
@@ -197,20 +202,19 @@ fun GameScreen(
                     .forEach { m ->
                         val p = uidToSpawn(m.uid)
                         val c = uidToColor(m.uid)
-
                         drawAvatar(center = p, color = c, isLocal = false)
                     }
 
-                // avatar locale (si muove)
+                // avatar locale
                 drawAvatar(center = avatar, color = uidToColor(currentUid), isLocal = true)
             }
 
-            // Hint UI
+            // Hint UI (NO tonalElevation: usa CardDefaults.cardElevation)
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(12.dp),
-                tonalElevation = 4.dp
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text("UI Quest", fontWeight = FontWeight.Bold)
@@ -222,6 +226,7 @@ fun GameScreen(
             }
         }
     }
+
     // --- Quest Dialog (UI only) ---
     selectedQuest?.let { q ->
         QuestDialog(
@@ -235,7 +240,6 @@ fun GameScreen(
             },
             onMarkCompleted = {
                 completed = completed + q.id
-                // se completi la quest attiva, la “chiudiamo” (UI)
                 if (activeQuestId == q.id) activeQuestId = null
                 selectedQuest = null
             }
@@ -284,7 +288,6 @@ private fun QuestDialog(
                     enabled = !isCompleted && !isActive
                 ) { Text("Start quest") }
 
-                // Bottone debug per far vedere il flusso UI subito
                 OutlinedButton(
                     onClick = onMarkCompleted,
                     enabled = !isCompleted
@@ -302,13 +305,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAvatar(
     color: Color,
     isLocal: Boolean
 ) {
-    // aura
     drawCircle(
         color = color.copy(alpha = if (isLocal) 0.25f else 0.18f),
         radius = if (isLocal) 48f else 42f,
         center = center
     )
-    // corpo
     drawCircle(
         color = color,
         radius = if (isLocal) 22f else 20f,
@@ -316,14 +317,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAvatar(
     )
 }
 
-// Colore deterministico: hash(uid) -> hue (0..360)
 private fun uidToColor(uid: String): Color {
     val h = (uid.hashCode().toLong() and 0xFFFFFFFFL)
     val hue = (h % 360).toFloat()
     return Color.hsv(hue, 0.75f, 0.95f)
 }
 
-// Spawn deterministico: pochi punti predefiniti (semplice e stabile)
 private fun uidToSpawn(uid: String): Offset {
     val spawns = listOf(
         Offset(180f, 650f),
