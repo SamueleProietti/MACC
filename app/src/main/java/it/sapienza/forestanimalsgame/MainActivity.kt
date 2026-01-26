@@ -31,6 +31,7 @@ import com.google.firebase.auth.FirebaseUser
 import it.sapienza.forestanimalsgame.ui.auth.AuthViewModel
 import it.sapienza.forestanimalsgame.ui.theme.ForestAnimalsGameTheme
 import it.sapienza.forestanimalsgame.ui.register.RegisterActivity
+import it.sapienza.forestanimalsgame.ui.lobby.LobbyActivity
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -80,6 +81,9 @@ class MainActivity : ComponentActivity() {
                                 onLogout = { authViewModel.logout() },
                                 onCompleteProfile = {
                                     startActivity(Intent(this, RegisterActivity::class.java))
+                                },
+                                onOpenLobby = {
+                                    startActivity(Intent(this, LobbyActivity::class.java))
                                 }
                             )
                         }
@@ -124,7 +128,8 @@ class MainActivity : ComponentActivity() {
 fun HomeScreen(
     user: FirebaseUser,
     onLogout: () -> Unit,
-    onCompleteProfile: () -> Unit
+    onCompleteProfile: () -> Unit,
+    onOpenLobby: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -135,7 +140,13 @@ fun HomeScreen(
     ) {
         Text("Benvenuto, ${user.displayName ?: "giocatore"}")
         Text(user.email ?: "", style = MaterialTheme.typography.bodyMedium)
+
+        Spacer(Modifier.height(12.dp))
         Button(onClick = onCompleteProfile) { Text("Completa profilo") }
+
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onOpenLobby) { Text("Gioca (Lobby)") }
+
         Spacer(Modifier.height(24.dp))
         Button(onClick = onLogout) { Text("Logout") }
     }
