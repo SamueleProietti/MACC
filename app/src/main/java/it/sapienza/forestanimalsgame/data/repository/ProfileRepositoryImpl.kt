@@ -8,9 +8,9 @@ import it.sapienza.forestanimalsgame.data.remote.api.ProfileApi
 import it.sapienza.forestanimalsgame.data.remote.api.ProfileMeUpsertRequest
 import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository
 import kotlinx.coroutines.tasks.await
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType
 import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
 import java.io.ByteArrayOutputStream
 
 class ProfileRepositoryImpl(
@@ -18,18 +18,20 @@ class ProfileRepositoryImpl(
 ) : ProfileRepository {
 
     override suspend fun completeProfile(uid: String, location: Location, photo: Bitmap) {
+        // uid arriva dall’interfaccia, ma lato backend l’uid vero lo ricava dal token
         val bearer = getBearerToken()
 
-        // 1) upload foto profilo -> backend -> GCS
+        // 1) upload foto -> backend -> GCS
         val photoUrl = uploadPhotoToBackend(bearer, photo)
 
-        // 2) upsert profilo (lat/lng + photoUrl)
+        // 2) upsert profilo -> backend -> Cloud SQL
         val req = ProfileMeUpsertRequest(
-            nickname = null, // al momento non lo chiedete in UI
+            nickname = null,
             lat = location.latitude,
             lng = location.longitude,
             photoUrl = photoUrl
         )
+
         api.upsertProfileMe(bearer, req)
     }
 
@@ -39,11 +41,13 @@ class ProfileRepositoryImpl(
             baos.toByteArray()
         }
 
-        val body = bytes.toRequestBody("image/jpeg".toMediaType())
+        val mediaType = MediaType.parse("image/jpeg")
+        val requestBody = RequestBody.create(mediaType, bytes)
+
         val part = MultipartBody.Part.createFormData(
-            name = "photo",
-            filename = "profile.jpg",
-            body = body
+            "photo",
+            "profile.jpg",
+            requestBody
         )
 
         return api.uploadProfilePhoto(bearer, part).photoUrl
