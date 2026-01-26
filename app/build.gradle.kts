@@ -63,6 +63,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.storage)
+    implementation("com.google.firebase:firebase-firestore-ktx")
 
     // Networking
     implementation(libs.retrofit)
@@ -70,6 +71,7 @@ dependencies {
     implementation(libs.moshi.kotlin)
 
     // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation(libs.kotlinx.coroutines.play.services)
 
     // Credential Manager + Google ID
@@ -77,7 +79,5 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.0")
 
     // Google Play Services Location
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
     implementation(libs.play.services.location)
 }
