@@ -4,7 +4,7 @@ from sqlalchemy import select
 from ..db import get_session
 from ..models import UserProfile
 from ..auth import require_auth
-from ..services.storage import upload_profile_photo as upload_profile_photo_to_bucket
+from ..services.storage import upload_profile_photo_to_bucket
 
 bp = Blueprint("profile", __name__)
 

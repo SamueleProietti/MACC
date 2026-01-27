@@ -8,7 +8,7 @@ GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 GCS_PUBLIC = os.getenv("GCS_PUBLIC", "false").lower() == "true"
 
 
-def upload_profile_photo(uid: str, file_storage) -> str:
+def upload_profile_photo_to_bucket(uid: str, file_storage) -> str:
     """
     Upload su Google Cloud Storage.
     Ritorna un URL utilizzabile dall'app:
