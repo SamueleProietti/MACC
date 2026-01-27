@@ -12,6 +12,8 @@ import okhttp3.MediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import java.io.ByteArrayOutputStream
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class ProfileRepositoryImpl(
     private val api: ProfileApi = ApiClient.profileApi
@@ -41,8 +43,8 @@ class ProfileRepositoryImpl(
             baos.toByteArray()
         }
 
-        val mediaType = MediaType.parse("image/jpeg")
-        val requestBody = RequestBody.create(mediaType, bytes)
+        val mediaType = "image/jpeg".toMediaType()
+        val requestBody = bytes.toRequestBody(mediaType)
 
         val part = MultipartBody.Part.createFormData(
             "photo",
