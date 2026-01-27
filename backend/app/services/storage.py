@@ -11,9 +11,10 @@ GCS_PUBLIC = os.getenv("GCS_PUBLIC", "false").lower() == "true"
 def upload_profile_photo_to_bucket(uid: str, file_storage) -> str:
     """
     Upload su Google Cloud Storage.
+
     Ritorna un URL utilizzabile dall'app:
-    - Se GCS_PUBLIC=true: URL pubblico (stabile)
-    - Altrimenti: signed URL (temporaneo)
+    - Se GCS_PUBLIC=true: URL pubblico "classico" (richiede bucket pubblico via IAM, con UBLA).
+    - Altrimenti: signed URL temporaneo (1 ora).
     """
     if not GCS_BUCKET:
         raise RuntimeError("GCS_BUCKET env var is missing")
@@ -21,7 +22,7 @@ def upload_profile_photo_to_bucket(uid: str, file_storage) -> str:
     client = storage.Client()
     bucket = client.bucket(GCS_BUCKET)
 
-    filename = file_storage.filename or "photo.jpg"
+    filename = getattr(file_storage, "filename", None) or "photo.jpg"
     ext = os.path.splitext(filename)[1].lower()
     if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
         ext = ".jpg"
@@ -31,11 +32,8 @@ def upload_profile_photo_to_bucket(uid: str, file_storage) -> str:
 
     content_type = getattr(file_storage, "mimetype", None) or "application/octet-stream"
 
-    # 🔒 robustezza: assicuriamoci che lo stream stia all'inizio
-    stream = getattr(file_storage, "stream", None)
-    if stream is None:
-        # fallback: FileStorage stesso spesso è file-like
-        stream = file_storage
+    # assicura inizio stream
+    stream = getattr(file_storage, "stream", None) or file_storage
     try:
         stream.seek(0)
     except Exception:
@@ -43,19 +41,14 @@ def upload_profile_photo_to_bucket(uid: str, file_storage) -> str:
 
     blob.upload_from_file(stream, content_type=content_type)
 
-    #if GCS_PUBLIC:
-     #   blob.make_public()
-      #  return blob.public_url
-    
-    if os.getenv("GCS_PUBLIC", "false").lower() == "true":
+    # UBLA attivo: NON usare blob.make_public()
+    if GCS_PUBLIC:
         # URL pubblica "classica"
-        return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
-    else:
-        # se bucket privato: meglio ritornare gs:// e poi servirla con endpoint autenticato
-        return f"gs://{bucket_name}/{blob_name}"
+        return f"https://storage.googleapis.com/{GCS_BUCKET}/{object_name}"
 
-    # Signed URL (1 ora)
+    # Signed URL (1 ora) - utile se bucket privato
     return blob.generate_signed_url(
         expiration=timedelta(hours=1),
         method="GET",
+        version="v4",
     )
