@@ -43,9 +43,16 @@ def upload_profile_photo_to_bucket(uid: str, file_storage) -> str:
 
     blob.upload_from_file(stream, content_type=content_type)
 
-    if GCS_PUBLIC:
-        blob.make_public()
-        return blob.public_url
+    #if GCS_PUBLIC:
+     #   blob.make_public()
+      #  return blob.public_url
+    
+    if os.getenv("GCS_PUBLIC", "false").lower() == "true":
+        # URL pubblica "classica"
+        return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+    else:
+        # se bucket privato: meglio ritornare gs:// e poi servirla con endpoint autenticato
+        return f"gs://{bucket_name}/{blob_name}"
 
     # Signed URL (1 ora)
     return blob.generate_signed_url(
