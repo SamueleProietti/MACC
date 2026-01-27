@@ -13,6 +13,8 @@ def init_db():
     db_url = os.getenv("DB_URL")
     if not db_url:
         raise RuntimeError("DB_URL env var is missing")
+    
+    db_url = db_url.strip().strip('"').strip("'")
 
     _engine = create_engine(db_url, pool_pre_ping=True)
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
