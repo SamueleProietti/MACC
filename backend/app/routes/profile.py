@@ -63,8 +63,20 @@ def upsert_profile_me():
 def upload_profile_photo_route():
     uid = g.uid
 
+    # DEBUG: cosa sta arrivando davvero?
+    # (questo lo puoi lasciare finché non funziona)
+    ct = request.headers.get("Content-Type")
+    mt = request.mimetype
+    keys = list(request.files.keys())
+
     if "photo" not in request.files:
-        return jsonify(error="missing_file_field_photo"), 400
+        return jsonify(
+            error="missing_file_field_photo",
+            contentType=ct,
+            mimetype=mt,
+            receivedFiles=keys,
+            receivedFormKeys=list(request.form.keys()),
+        ), 400
 
     file = request.files["photo"]
     if not file or file.filename == "":
