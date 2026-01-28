@@ -79,9 +79,13 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
     val messages by viewModel.messages.observeAsState(emptyList())
     val error by viewModel.error.observeAsState(null)
 
-    val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid }
-    val isHost = (session?.hostUid != null && session?.hostUid == currentUid)
-    val canStart = (session?.members?.size ?: 0) >= 2 && (session?.status == "LOBBY") && isHost
+    // 🔧 NON usare remember qui: se currentUser è null al primo render, resti bloccato.
+    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+
+    val isHost = (currentUid != null && session?.hostUid == currentUid)
+
+    // ✅ regola: basta 1 giocatore, sessione in LOBBY e devi essere host
+    val canStart = (session?.members?.size ?: 0) >= 1 && (session?.status == "LOBBY") && isHost
 
     var messageText by rememberSaveable { mutableStateOf("") }
 
@@ -91,7 +95,6 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Header (no tonalElevation: uso shadowElevation)
         Surface(shadowElevation = 2.dp) {
             Row(
                 modifier = Modifier
@@ -191,12 +194,6 @@ private fun MembersCard(session: Session?) {
                     Text("• ${m.displayName} (${m.avatar})", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Start abilitato solo se siete almeno 2 e solo l’host può avviarlo.",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }

@@ -12,5 +12,5 @@ interface LobbyRepository {
     fun listenMessages(sessionId: String, onUpdate: (List<ChatMessage>) -> Unit): () -> Unit
     suspend fun sendMessage(sessionId: String, msg: ChatMessage)
 
-    suspend fun startGame(sessionId: String, hostUid: String)
+    suspend fun startGameIfHost(sessionId: String)
 }

@@ -118,7 +118,7 @@ class LobbyViewModel(
 
         viewModelScope.launch {
             try {
-                repo.startGame(sid, uid)
+                repo.startGameIfHost(sid)
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Errore start game"
             }

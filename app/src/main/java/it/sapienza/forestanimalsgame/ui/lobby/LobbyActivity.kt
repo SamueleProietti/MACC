@@ -4,11 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.fillMaxSize
 import it.sapienza.forestanimalsgame.ui.theme.ForestAnimalsGameTheme
 
 class LobbyActivity : ComponentActivity() {
@@ -21,6 +21,7 @@ class LobbyActivity : ComponentActivity() {
         setContent {
             ForestAnimalsGameTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
+
                     val sessionId by lobbyViewModel.sessionId.observeAsState(null)
                     val session by lobbyViewModel.session.observeAsState(null)
 
@@ -47,6 +48,5 @@ class LobbyActivity : ComponentActivity() {
                 }
             }
         }
-
     }
 }

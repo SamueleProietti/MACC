@@ -1,5 +1,6 @@
 package it.sapienza.forestanimalsgame.data.repository
 
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
@@ -9,7 +10,8 @@ import it.sapienza.forestanimalsgame.data.model.Session
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
 
 class LobbyRepositoryImpl(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : LobbyRepository {
 
     private val sessions = db.collection("sessions")
@@ -59,10 +61,8 @@ class LobbyRepositoryImpl(
             val newMembers = session.members.filterNot { it.uid == uid }
 
             if (newMembers.isEmpty()) {
-                // se nessuno rimane, cancella sessione
                 tx.delete(docRef)
             } else {
-                // se host esce, riassegna host al primo rimasto
                 val newHost = if (session.hostUid == uid) newMembers.first().uid else session.hostUid
                 tx.set(docRef, session.copy(hostUid = newHost, members = newMembers))
             }
@@ -76,8 +76,7 @@ class LobbyRepositoryImpl(
                     onUpdate(null)
                     return@addSnapshotListener
                 }
-                val session = snap?.toObject(Session::class.java)
-                onUpdate(session)
+                onUpdate(snap?.toObject(Session::class.java))
             }
         return { reg.remove() }
     }
@@ -105,14 +104,23 @@ class LobbyRepositoryImpl(
             .await()
     }
 
-    override suspend fun startGame(sessionId: String, hostUid: String) {
-        val docRef = sessions.document(sessionId)
+    override suspend fun startGameIfHost(sessionId: String) {
+        val currentUid = auth.currentUser?.uid ?: throw IllegalStateException("not_authenticated")
+        val ref = sessions.document(sessionId)
+
         db.runTransaction { tx ->
-            val snap = tx.get(docRef)
-            val session = snap.toObject(Session::class.java) ?: return@runTransaction
-            if (session.hostUid != hostUid) return@runTransaction // solo host
-            if (session.members.size < 2) return@runTransaction   // minimo 2
-            tx.update(docRef, "status", "IN_GAME")
+            val snap = tx.get(ref)
+            val sess = snap.toObject(Session::class.java) ?: throw IllegalStateException("session_not_found")
+
+            if (sess.hostUid != currentUid) throw IllegalStateException("only_host_can_start")
+            if (sess.status != "LOBBY") throw IllegalStateException("session_not_in_lobby")
+            if (sess.members.size < 1) throw IllegalStateException("not_enough_players")
+
+            tx.update(ref, mapOf(
+                "status" to "IN_GAME",
+                "startedAt" to System.currentTimeMillis()
+            ))
+            null
         }.await()
     }
 }
