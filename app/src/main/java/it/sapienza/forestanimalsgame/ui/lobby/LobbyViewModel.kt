@@ -8,11 +8,14 @@ import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.data.model.ChatMessage
 import it.sapienza.forestanimalsgame.data.model.Session
 import it.sapienza.forestanimalsgame.data.repository.LobbyRepositoryImpl
+import it.sapienza.forestanimalsgame.data.repository.ProfileRepositoryImpl   // ✅ NEW
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
+import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository     // ✅ NEW
 import kotlinx.coroutines.launch
 
 class LobbyViewModel(
-    private val repo: LobbyRepository = LobbyRepositoryImpl()
+    private val repo: LobbyRepository = LobbyRepositoryImpl(),
+    private val profileRepo: ProfileRepository = ProfileRepositoryImpl()     // ✅ NEW
 ) : ViewModel() {
 
     private val _sessionId = MutableLiveData<String?>(null)
@@ -30,12 +33,30 @@ class LobbyViewModel(
     private val _loading = MutableLiveData(false)
     val loading: LiveData<Boolean> = _loading
 
+    // ✅ NEW: avatarId dell’utente (default fox)
+    private val _avatarId = MutableLiveData("fox")
+    val avatarId: LiveData<String> = _avatarId
+
     private var removeSessionListener: (() -> Unit)? = null
     private var removeMessagesListener: (() -> Unit)? = null
 
     private fun currentUid(): String? = FirebaseAuth.getInstance().currentUser?.uid
     private fun currentName(): String =
         FirebaseAuth.getInstance().currentUser?.displayName ?: "Player"
+
+    // ✅ NEW: carica avatar dal backend (profilo)
+    fun loadMyAvatarId() {
+        viewModelScope.launch {
+            try {
+                val prof = profileRepo.getMyProfile()
+                val id = prof.avatarId
+                _avatarId.value = if (id.isNullOrBlank()) "fox" else id
+            } catch (_: Exception) {
+                // fallback silenzioso: resta "fox"
+                _avatarId.value = _avatarId.value ?: "fox"
+            }
+        }
+    }
 
     fun createSession() {
         val uid = currentUid()

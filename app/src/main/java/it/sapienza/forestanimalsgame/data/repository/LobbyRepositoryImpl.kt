@@ -8,6 +8,8 @@ import it.sapienza.forestanimalsgame.data.model.ChatMessage
 import it.sapienza.forestanimalsgame.data.model.Member
 import it.sapienza.forestanimalsgame.data.model.Session
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
+import it.sapienza.forestanimalsgame.data.remote.api.ProfileMeResponse
+
 
 class LobbyRepositoryImpl(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),

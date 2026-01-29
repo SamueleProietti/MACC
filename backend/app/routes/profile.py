@@ -8,12 +8,10 @@ from ..services.storage import upload_profile_photo_to_bucket
 
 bp = Blueprint("profile", __name__)
 
-
 @bp.get("/profile/me")
 @require_auth
 def get_profile_me():
     uid = g.uid
-
     with get_session() as db:
         prof = db.execute(
             select(UserProfile).where(UserProfile.firebase_uid == uid)
@@ -26,20 +24,22 @@ def get_profile_me():
             uid=prof.firebase_uid,
             nickname=prof.nickname,
             photoUrl=prof.photo_url,
+            avatarId=prof.avatar_id,      # ✅ NEW
             lat=prof.last_lat,
             lng=prof.last_lng,
         ), 200
-
 
 @bp.put("/profile/me")
 @require_auth
 def upsert_profile_me():
     uid = g.uid
-
     body = request.get_json(silent=True) or {}
+
     nickname = body.get("nickname")
     lat = body.get("lat")
     lng = body.get("lng")
+    photo_url = body.get("photoUrl")
+    avatar_id = body.get("avatarId")
 
     with get_session() as db:
         prof = db.execute(
@@ -50,39 +50,34 @@ def upsert_profile_me():
             prof = UserProfile(firebase_uid=uid)
             db.add(prof)
 
-        prof.nickname = nickname
-        prof.last_lat = lat
-        prof.last_lng = lng
+        # ✅ aggiorna SOLO se il campo è presente e non null (così non cancelli roba)
+        if nickname is not None:
+            prof.nickname = nickname
+        if lat is not None:
+            prof.last_lat = lat
+        if lng is not None:
+            prof.last_lng = lng
+        if photo_url is not None:
+            prof.photo_url = photo_url
+        if avatar_id is not None:
+            prof.avatar_id = avatar_id
+
         db.commit()
 
     return jsonify(status="ok"), 200
-
 
 @bp.post("/profile/me/photo")
 @require_auth
 def upload_profile_photo_route():
     uid = g.uid
 
-    # DEBUG: cosa sta arrivando davvero?
-    # (questo lo puoi lasciare finché non funziona)
-    ct = request.headers.get("Content-Type")
-    mt = request.mimetype
-    keys = list(request.files.keys())
-
     if "photo" not in request.files:
-        return jsonify(
-            error="missing_file_field_photo",
-            contentType=ct,
-            mimetype=mt,
-            receivedFiles=keys,
-            receivedFormKeys=list(request.form.keys()),
-        ), 400
+        return jsonify(error="missing_file_field_photo"), 400
 
     file = request.files["photo"]
     if not file or file.filename == "":
         return jsonify(error="empty_filename"), 400
 
-    # chiama il SERVIZIO storage (non la route)
     photo_url = upload_profile_photo_to_bucket(uid, file)
 
     with get_session() as db:

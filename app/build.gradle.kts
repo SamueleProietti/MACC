@@ -59,6 +59,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
@@ -80,6 +82,8 @@ dependencies {
 
     // Google Play Services Location
     implementation(libs.play.services.location)
+
+    implementation("androidx.compose.material:material-icons-extended")
 
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")

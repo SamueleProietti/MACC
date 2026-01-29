@@ -1,7 +1,9 @@
 package it.sapienza.forestanimalsgame.data.remote.api
 
+import com.google.gson.annotations.SerializedName
 import okhttp3.MultipartBody
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -10,16 +12,31 @@ import retrofit2.http.Part
 
 data class ProfileMeUpsertRequest(
     val nickname: String? = null,
-    val lat: Double,
-    val lng: Double,
-    val photoUrl: String? = null
+    val lat: Double? = null,
+    val lng: Double? = null,
+    val photoUrl: String? = null,
+    val avatarId: String? = null
 )
 
 data class PhotoUploadResponse(
-    val photoUrl: String
+    @SerializedName("photoUrl") val photoUrl: String
+)
+
+data class ProfileMeResponse(
+    val uid: String,
+    val nickname: String? = null,
+    @SerializedName("photoUrl") val photoUrl: String? = null,
+    val lat: Double? = null,
+    val lng: Double? = null,
+    @SerializedName("avatarId") val avatarId: String? = null
 )
 
 interface ProfileApi {
+
+    @GET("v1/profile/me")
+    suspend fun getProfileMe(
+        @Header("Authorization") bearer: String
+    ): ProfileMeResponse
 
     @Multipart
     @POST("v1/profile/me/photo")

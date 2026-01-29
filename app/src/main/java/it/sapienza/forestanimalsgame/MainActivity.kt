@@ -142,7 +142,7 @@ fun HomeScreen(
         Text(user.email ?: "", style = MaterialTheme.typography.bodyMedium)
 
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onCompleteProfile) { Text("Completa profilo") }
+        Button(onClick = onCompleteProfile) { Text("Profilo") }
 
         Spacer(Modifier.height(12.dp))
         Button(onClick = onOpenLobby) { Text("Gioca (Lobby)") }

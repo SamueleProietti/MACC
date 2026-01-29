@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect            // ✅ NEW
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
@@ -22,8 +23,16 @@ class LobbyActivity : ComponentActivity() {
             ForestAnimalsGameTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
 
+                    // ✅ NEW: carica avatar una volta quando la schermata parte
+                    LaunchedEffect(Unit) {
+                        lobbyViewModel.loadMyAvatarId()
+                    }
+
                     val sessionId by lobbyViewModel.sessionId.observeAsState(null)
                     val session by lobbyViewModel.session.observeAsState(null)
+
+                    // ✅ NEW: osserva avatarId
+                    val avatarId by lobbyViewModel.avatarId.observeAsState("fox")
 
                     when {
                         sessionId.isNullOrBlank() -> {
@@ -34,6 +43,7 @@ class LobbyActivity : ComponentActivity() {
                             it.sapienza.forestanimalsgame.ui.game.GameScreen(
                                 sessionId = sessionId!!,
                                 session = session,
+                                avatarId = avatarId, // ✅ qui non è più hardcoded
                                 onLeave = { lobbyViewModel.leaveSession() }
                             )
                         }

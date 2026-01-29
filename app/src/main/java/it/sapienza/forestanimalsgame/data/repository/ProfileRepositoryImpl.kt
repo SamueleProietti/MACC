@@ -5,35 +5,38 @@ import android.location.Location
 import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.data.remote.api.ApiClient
 import it.sapienza.forestanimalsgame.data.remote.api.ProfileApi
+import it.sapienza.forestanimalsgame.data.remote.api.ProfileMeResponse
 import it.sapienza.forestanimalsgame.data.remote.api.ProfileMeUpsertRequest
 import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository
 import kotlinx.coroutines.tasks.await
-import okhttp3.MediaType
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import java.io.ByteArrayOutputStream
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.ByteArrayOutputStream
 
 class ProfileRepositoryImpl(
     private val api: ProfileApi = ApiClient.profileApi
 ) : ProfileRepository {
 
-    override suspend fun completeProfile(uid: String, location: Location, photo: Bitmap) {
-        // uid arriva dall’interfaccia, ma lato backend l’uid vero lo ricava dal token
+    override suspend fun getMyProfile(): ProfileMeResponse {
         val bearer = getBearerToken()
+        return api.getProfileMe(bearer)
+    }
 
-        // 1) upload foto -> backend -> GCS
-        val photoUrl = uploadPhotoToBackend(bearer, photo)
+    override suspend fun uploadMyPhoto(photo: Bitmap): String {
+        val bearer = getBearerToken()
+        return uploadPhotoToBackend(bearer, photo)
+    }
 
-        // 2) upsert profilo -> backend -> Cloud SQL
+    override suspend fun upsertMyProfile(location: Location?, photoUrl: String?, avatarId: String?) {
+        val bearer = getBearerToken()
         val req = ProfileMeUpsertRequest(
             nickname = null,
-            lat = location.latitude,
-            lng = location.longitude,
-            photoUrl = photoUrl
+            lat = location?.latitude,
+            lng = location?.longitude,
+            photoUrl = photoUrl,
+            avatarId = avatarId
         )
-
         api.upsertProfileMe(bearer, req)
     }
 

@@ -7,6 +7,7 @@ class UserProfile(Base):
     firebase_uid = Column(String(128), unique=True, index=True, nullable=False)
     nickname = Column(String(80), nullable=True)
     photo_url = Column(Text, nullable=True)
+    avatar_id = Column(String(32), nullable=True)   # ✅ NEW
     last_lat = Column(Float, nullable=True)
     last_lng = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
