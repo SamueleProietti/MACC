@@ -17,8 +17,8 @@ def get_profile_me():
             select(UserProfile).where(UserProfile.firebase_uid == uid)
         ).scalar_one_or_none()
 
-        if not prof:
-            return jsonify(error="profile_not_found"), 404
+        #if not prof:
+            #return jsonify(error="profile_not_found"), 404
 
         return jsonify(
             uid=prof.firebase_uid,

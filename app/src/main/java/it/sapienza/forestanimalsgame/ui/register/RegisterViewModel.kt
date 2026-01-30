@@ -32,11 +32,11 @@ class RegisterViewModel(
     private val _error = MutableLiveData<String?>(null)
     val error: LiveData<String?> = _error
 
-    private val _loading = MutableLiveData(false)
-    val loading: LiveData<Boolean> = _loading
-
     private val _done = MutableLiveData(false)
     val done: LiveData<Boolean> = _done
+
+    private val _loading = MutableLiveData(true) 
+    val loading: LiveData<Boolean> = _loading
 
     fun setLocation(location: Location) { _location.value = location }
     fun setPhoto(bitmap: Bitmap) { _photo.value = bitmap }

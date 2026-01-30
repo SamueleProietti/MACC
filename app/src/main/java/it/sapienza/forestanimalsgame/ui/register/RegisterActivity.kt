@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,26 +19,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.Icons
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import androidx.compose.ui.Alignment
-import androidx.compose.material3.Icon
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
+import coil.compose.SubcomposeAsyncImage
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -50,7 +51,7 @@ class RegisterActivity : ComponentActivity() {
 
     private val permissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
-            // se vuoi puoi controllare i permessi qui
+            // Qui potresti gestire il caso in cui i permessi non vengono dati
         }
 
     private val cameraLauncher =
@@ -75,7 +76,7 @@ class RegisterActivity : ComponentActivity() {
             RegisterScreen(
                 onTakePhoto = { cameraLauncher.launch(null) },
                 onRefreshLocation = { fetchLocation() },
-                onRegister = { viewModel.saveProfile() },   // ✅ FIX: prima era completeRegistration()
+                onRegister = { viewModel.saveProfile() },
                 onFinish = { finish() },
                 viewModel = viewModel
             )
@@ -83,11 +84,15 @@ class RegisterActivity : ComponentActivity() {
     }
 
     private fun fetchLocation() {
-        fusedLocationClient.getCurrentLocation(
-            Priority.PRIORITY_HIGH_ACCURACY,
-            null
-        ).addOnSuccessListener { location ->
-            if (location != null) viewModel.setLocation(location)
+        try {
+            fusedLocationClient.getCurrentLocation(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                null
+            ).addOnSuccessListener { location ->
+                if (location != null) viewModel.setLocation(location)
+            }
+        } catch (e: SecurityException) {
+            // Gestione mancanza permessi
         }
     }
 }
@@ -105,70 +110,72 @@ fun RegisterScreen(
     val photoUrl by viewModel.photoUrl.observeAsState(null)
     val avatarId by viewModel.avatarId.observeAsState("fox")
     val error by viewModel.error.observeAsState(null)
-    val loading by viewModel.loading.observeAsState(false)
     val done by viewModel.done.observeAsState(false)
+    val loading by viewModel.loading.observeAsState(true)
 
-    // ✅ quando entri/ri-entri nella schermata, ricarica dal backend
+    // Carica profilo al primo avvio
     LaunchedEffect(Unit) {
         viewModel.loadMyProfile()
     }
 
-    // se vuoi chiudere la pagina dopo il salvataggio
+    // Chiude l'activity se il salvataggio è completato
     LaunchedEffect(done) {
         if (done) onFinish()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
-    ) {
-        Text("Profilo", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            "Location: " + (location?.let { "${it.latitude}, ${it.longitude}" } ?: "non disponibile")
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onRefreshLocation) { Text("Aggiorna posizione") }
-
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onTakePhoto) { Text("Scatta foto") }
-
-        Spacer(Modifier.height(8.dp))
-        Text("Foto: " + (if (photo != null || !photoUrl.isNullOrBlank()) "OK" else "Obbligatoria"))
-
-        Box(
+    // 1. SE STA CARICANDO, MOSTRA SOLO LA ROTELLA
+    if (loading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        // 2. ALTRIMENTI MOSTRA IL CONTENUTO
+        Column(
             modifier = Modifier
-                .height(160.dp)
-                .width(160.dp) // Facciamola quadrata o tonda
-                .border(1.dp, MaterialTheme.colorScheme.outline),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            when {
-                // Caso 1: Nuova foto appena scattata
-                photo != null -> {
-                    Image(
-                        bitmap = photo!!.asImageBitmap(),
-                        contentDescription = "Foto profilo",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                // Caso 2: Foto esistente dal server
-                !photoUrl.isNullOrBlank() -> {
-                    AsyncImage(
-                        model = photoUrl,
-                        contentDescription = "Foto profilo",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                // Caso 3: Placeholder (Nessuna foto)
-                else -> {
+            Text("Profilo", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(16.dp))
+
+            // --- SEZIONE POSIZIONE ---
+            if (location != null) {
+                Text(
+                    "Posizione: ${location?.latitude}, ${location?.longitude}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Text("Posizione non disponibile", style = MaterialTheme.typography.bodyMedium)
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onRefreshLocation) { Text("Aggiorna posizione") }
+            // --------------------------
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(onClick = onTakePhoto) { Text("Scatta foto") }
+
+            Spacer(Modifier.height(8.dp))
+
+            val hasPhoto = photo != null || !photoUrl.isNullOrBlank()
+            Text("Foto: " + (if (hasPhoto) "OK" else "Obbligatoria"))
+
+            Spacer(Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .height(160.dp)
+                    .width(160.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline),
+                contentAlignment = Alignment.Center
+            ) {
+                // Definisco il placeholder
+                val PlaceholderIcon = @Composable {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.Person, // O una risorsa R.drawable
+                            imageVector = Icons.Default.Person,
                             contentDescription = "Manca foto",
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -176,54 +183,56 @@ fun RegisterScreen(
                         Text("Nessuna foto", style = MaterialTheme.typography.bodySmall)
                     }
                 }
+
+                when {
+                    // Caso 1: Nuova foto appena scattata (locale)
+                    photo != null -> {
+                        Image(
+                            bitmap = photo!!.asImageBitmap(),
+                            contentDescription = "Foto profilo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    // Caso 2: Foto esistente dal server
+                    !photoUrl.isNullOrBlank() -> {
+                        // ✅ FIX: Usiamo SubcomposeAsyncImage per supportare il blocco 'error' composable
+                        SubcomposeAsyncImage(
+                            model = photoUrl,
+                            contentDescription = "Foto profilo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            error = { PlaceholderIcon() } // Ora questo è valido!
+                        )
+                    }
+                    // Caso 3: Nessuna foto
+                    else -> {
+                        PlaceholderIcon()
+                    }
+                }
             }
-        }
 
-        Spacer(Modifier.height(24.dp))
-        Text("Scegli il tuo avatar:", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(24.dp))
+            Text("Scegli il tuo avatar:", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AvatarChoice(
-                id = "fox",
-                resId = R.drawable.av_fox,
-                selected = avatarId == "fox",
-                onClick = { viewModel.setAvatar("fox") }
-            )
-            AvatarChoice(
-                id = "deer",
-                resId = R.drawable.av_deer,
-                selected = avatarId == "deer",
-                onClick = { viewModel.setAvatar("deer") }
-            )
-            AvatarChoice(
-                id = "wolf",
-                resId = R.drawable.av_wolf,
-                selected = avatarId == "wolf",
-                onClick = { viewModel.setAvatar("wolf") }
-            )
-            AvatarChoice(
-                id = "bear",
-                resId = R.drawable.av_bear,
-                selected = avatarId == "bear",
-                onClick = { viewModel.setAvatar("bear") }
-            )
-            AvatarChoice(
-                id = "boar",
-                resId = R.drawable.av_boar,
-                selected = avatarId == "boar",
-                onClick = { viewModel.setAvatar("boar") }
-            )
-        }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AvatarChoice("fox", R.drawable.av_fox, avatarId == "fox") { viewModel.setAvatar("fox") }
+                AvatarChoice("deer", R.drawable.av_deer, avatarId == "deer") { viewModel.setAvatar("deer") }
+                AvatarChoice("wolf", R.drawable.av_wolf, avatarId == "wolf") { viewModel.setAvatar("wolf") }
+                AvatarChoice("bear", R.drawable.av_bear, avatarId == "bear") { viewModel.setAvatar("bear") }
+                AvatarChoice("boar", R.drawable.av_boar, avatarId == "boar") { viewModel.setAvatar("boar") }
+            }
 
-        if (!error.isNullOrBlank()) {
-            Spacer(Modifier.height(16.dp))
-            Text(error!!, color = MaterialTheme.colorScheme.error)
-        }
+            if (!error.isNullOrBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Text(error!!, color = MaterialTheme.colorScheme.error)
+            }
 
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onRegister, enabled = !loading) {
-            Text(if (loading) "Salvataggio..." else "Salva profilo")
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onRegister, enabled = !loading) {
+                Text(if (loading) "Salvataggio..." else "Salva profilo")
+            }
         }
     }
 }
