@@ -128,7 +128,7 @@ fun RegisterScreen(
         Button(onClick = onTakePhoto) { Text("Scatta foto") }
 
         Spacer(Modifier.height(8.dp))
-        Text("Foto: " + (if (photo != null || !photoUrl.isNullOrBlank()) "OK" else "manca"))
+        Text("Foto: " + (if (photo != null) "OK" else "manca"))
 
         // ✅ mostra la foto: prima bitmap locale, altrimenti URL dal backend
         when {

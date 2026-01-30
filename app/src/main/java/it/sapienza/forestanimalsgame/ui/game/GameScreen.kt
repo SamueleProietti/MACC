@@ -28,13 +28,16 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.R
+import it.sapienza.forestanimalsgame.data.model.GameState
 import it.sapienza.forestanimalsgame.data.model.Session
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
+
 import kotlin.math.hypot
-import kotlin.math.abs
 import androidx.compose.foundation.BorderStroke
 
-// ------------------- SAVERS (Offset/Set) -------------------
 private val OffsetSaver: Saver<Offset, ArrayList<Float>> = Saver(
     save = { arrayListOf(it.x, it.y) },
     restore = { Offset(it[0], it[1]) }
@@ -45,7 +48,6 @@ private val StringSetSaver: Saver<Set<String>, ArrayList<String>> = Saver(
     restore = { it.toSet() }
 )
 
-// --- UI Quest models (placeholder) ---
 private enum class QuestType { LIGHT, GYRO, CAMERA }
 
 private data class QuestSpot(
@@ -57,45 +59,54 @@ private data class QuestSpot(
     val radiusPx: Float = 55f
 )
 
+private data class GameStatePayload(
+    val avatarX: Float,
+    val avatarY: Float,
+    val targetX: Float,
+    val targetY: Float,
+    val activeQuestId: String?,
+    val completedSorted: List<String>,
+    val panX: Float,
+    val panY: Float,
+    val zoom: Float
+)
+
 @Composable
 fun GameScreen(
     sessionId: String,
     session: Session?,
     avatarId: String,
+    initialGameState: GameState?,
+    onAutoSave: (GameState) -> Unit,
+
+    // ✅ STOP: torna alla pagina principale senza chiamare leaveSession
+    onStop: (GameState) -> Unit,
+
+    // ✅ ESCI: abbandono (leaveSession)
     onLeave: () -> Unit
 ) {
     val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "unknown" }
 
-    // ------------------- WORLD MAP (più grande dello schermo) -------------------
     val worldSize = remember { Size(width = 4000f, height = 4000f) }
     val worldCenter = remember(worldSize) { Offset(worldSize.width / 2f, worldSize.height / 2f) }
-
-    // Spawn AL CENTRO (con piccola variazione deterministica per UID)
     val spawn = remember(currentUid, worldCenter) { uidToSpawn(currentUid, worldCenter) }
 
-    // --- Avatar bitmap ---
     val context = LocalContext.current
     val resId = remember(avatarId) { avatarResId(avatarId) }
     val avatarBitmap = remember(resId) { ImageBitmap.imageResource(context.resources, resId) }
 
-    // Sprite size (in world px)
     val avatarSizePx = 336f
-
-    // Clamp usando una HITBOX (riduce il “padding” eccessivo)
     val avatarHitRadiusPx = 100f
     val half = avatarHitRadiusPx
 
-    // Canvas size (serve per clamp camera)
     var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
 
-    // ------------------- CAMERA (pan + zoom) -------------------
     var zoom by rememberSaveable { mutableStateOf(1f) }
     var pan by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(Offset.Zero) }
 
     val minZoom = 0.6f
     val maxZoom = 3.0f
 
-    // colori dal tema (NON dentro Canvas)
     val scheme = MaterialTheme.colorScheme
     val bgColor = scheme.surfaceVariant
     val treeColor = scheme.primary.copy(alpha = 0.35f)
@@ -103,7 +114,6 @@ fun GameScreen(
     val questActive = scheme.error
     val questDone = scheme.secondary
 
-    // Avatar e target in WORLD coords
     var avatar by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(spawn) }
     var target by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(spawn) }
 
@@ -137,8 +147,25 @@ fun GameScreen(
         )
     }
 
-    // inizializza camera centrando l'avatar (che ora parte al centro del mondo)
-    var cameraInitialized by remember { mutableStateOf(false) }
+    // ------------------- HYDRATE (Resume) -------------------
+    var hydrated by remember(sessionId, currentUid) { mutableStateOf(false) }
+
+    LaunchedEffect(sessionId, currentUid, initialGameState) {
+        if (hydrated) return@LaunchedEffect
+        val gs = initialGameState
+        if (gs != null) {
+            avatar = clampCenter(Offset(gs.avatarX.toFloat(), gs.avatarY.toFloat()), worldSize.width, worldSize.height, half)
+            target = clampCenter(Offset(gs.targetX.toFloat(), gs.targetY.toFloat()), worldSize.width, worldSize.height, half)
+            activeQuestId = gs.activeQuestId
+            completed = gs.completed.toSet()
+            zoom = gs.zoom.toFloat().coerceIn(minZoom, maxZoom)
+            pan = Offset(gs.panX.toFloat(), gs.panY.toFloat())
+        }
+        hydrated = true
+    }
+
+    // ------------------- CAMERA INIT -------------------
+    var cameraInitialized by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(canvasSize, sessionId) {
         if (!cameraInitialized && canvasSize.width > 0 && canvasSize.height > 0) {
             val desired = Offset(
@@ -157,7 +184,7 @@ fun GameScreen(
         }
     }
 
-    // movimento verso target (WORLD)
+    // ------------------- MOVEMENT -------------------
     LaunchedEffect(target) {
         repeat(40) {
             val dx = target.x - avatar.x
@@ -170,13 +197,11 @@ fun GameScreen(
                 x = avatar.x + dx * step,
                 y = avatar.y + dy * step
             )
-
             avatar = clampCenter(next, worldSize.width, worldSize.height, half)
             delay(16)
         }
     }
 
-    // completa quest quando arrivi vicino (WORLD)
     LaunchedEffect(avatar, activeQuestId) {
         val qid = activeQuestId ?: return@LaunchedEffect
         val spot = questSpots.firstOrNull { it.id == qid } ?: return@LaunchedEffect
@@ -187,6 +212,42 @@ fun GameScreen(
         }
     }
 
+    // ------------------- AUTOSAVE (debounce) -------------------
+    LaunchedEffect(sessionId, currentUid) {
+        snapshotFlow {
+            GameStatePayload(
+                avatarX = avatar.x,
+                avatarY = avatar.y,
+                targetX = target.x,
+                targetY = target.y,
+                activeQuestId = activeQuestId,
+                completedSorted = completed.toList().sorted(),
+                panX = pan.x,
+                panY = pan.y,
+                zoom = zoom
+            )
+        }
+            .distinctUntilChanged()
+            .debounce(900)
+            .collect { p ->
+                onAutoSave(
+                    GameState(
+                        avatarX = p.avatarX.toDouble(),
+                        avatarY = p.avatarY.toDouble(),
+                        targetX = p.targetX.toDouble(),
+                        targetY = p.targetY.toDouble(),
+                        activeQuestId = p.activeQuestId,
+                        completed = p.completedSorted,
+                        panX = p.panX.toDouble(),
+                        panY = p.panY.toDouble(),
+                        zoom = p.zoom.toDouble(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+    }
+
+    // ------------------- UI -------------------
     Column(modifier = Modifier.fillMaxSize()) {
 
         // HEADER
@@ -202,10 +263,34 @@ fun GameScreen(
                 Text(sessionId, style = MaterialTheme.typography.bodySmall)
                 Text("Stato: ${session?.status ?: "?"}", style = MaterialTheme.typography.bodySmall)
             }
-            OutlinedButton(onClick = onLeave) { Text("Esci") }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // ✅ STOP: torna alla main, sessione resta (resume OK)
+                OutlinedButton(
+                    onClick = {
+                        // ✅ stato attuale completo, incluso "completed"
+                        val state = GameState(
+                            avatarX = avatar.x.toDouble(),
+                            avatarY = avatar.y.toDouble(),
+                            targetX = target.x.toDouble(),
+                            targetY = target.y.toDouble(),
+                            activeQuestId = activeQuestId,
+                            completed = completed.toList().sorted(),
+                            panX = pan.x.toDouble(),
+                            panY = pan.y.toDouble(),
+                            zoom = zoom.toDouble(),
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        onStop(state) // LobbyActivity farà save+finish
+                    }
+                ) { Text("Stop") }
+
+
+                // ✅ ESCI: abbandono
+                Button(onClick = onLeave) { Text("Esci") }
+            }
         }
 
-        // INFO QUEST ATTIVA
         if (activeQuestId != null) {
             val spot = questSpots.firstOrNull { it.id == activeQuestId }
             if (spot != null) {
@@ -219,7 +304,6 @@ fun GameScreen(
             }
         }
 
-        // MAPPA (cornice + clipping)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -237,21 +321,17 @@ fun GameScreen(
                 tonalElevation = 2.dp,
                 border = BorderStroke(1.dp, scheme.outlineVariant)
             ) {
-                // clipToBounds qui è fondamentale: niente disegno esce dalla cornice
                 Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            // PINCH + PAN (2 dita)
                             .pointerInput(Unit) {
                                 detectTransformGestures { centroid, panChange, zoomChange, _ ->
                                     val oldZoom = zoom
                                     val newZoom = (zoom * zoomChange).coerceIn(minZoom, maxZoom)
                                     val zoomFactor = newZoom / oldZoom
 
-                                    // zoom attorno al punto "centroid"
                                     val tentativePan = pan + panChange + (centroid - pan) * (1 - zoomFactor)
-
                                     zoom = newZoom
 
                                     val cw = canvasSize.width.toFloat()
@@ -270,12 +350,10 @@ fun GameScreen(
                                     }
                                 }
                             }
-                            // TAP (1 dito / click mouse)
                             .pointerInput(Unit) {
                                 detectTapGestures { tap ->
                                     val worldTap = screenToWorld(tap, pan, zoom)
 
-                                    // tap su quest?
                                     val hit = questSpots.firstOrNull { spot ->
                                         val d = hypot(
                                             (worldTap.x - spot.position.x).toDouble(),
@@ -292,10 +370,8 @@ fun GameScreen(
                                 }
                             }
                     ) {
-                        // aggiorna size
                         canvasSize = IntSize(size.width.toInt(), size.height.toInt())
 
-                        // clamp pan sempre valido (rispetto alla CORNICE, cioè il Canvas)
                         pan = clampPan(
                             pan = pan,
                             canvasW = size.width,
@@ -305,15 +381,12 @@ fun GameScreen(
                             zoom = zoom
                         )
 
-                        // Applica camera: screen = world * zoom + pan
                         withTransform({
                             translate(pan.x, pan.y)
                             scale(zoom, zoom)
                         }) {
-                            // sfondo WORLD
                             drawRect(color = bgColor, size = worldSize)
 
-                            // alberi placeholder
                             fun tree(x: Float, y: Float, r: Float) {
                                 drawCircle(color = treeColor, radius = r, center = Offset(x, y))
                             }
@@ -322,7 +395,6 @@ fun GameScreen(
                             tree(900f, 980f, 75f)
                             tree(150f, 980f, 60f)
 
-                            // quest spots
                             questSpots.forEach { spot ->
                                 val isDone = spot.id in completed
                                 val isActive = spot.id == activeQuestId
@@ -334,7 +406,6 @@ fun GameScreen(
                                 drawCircle(color = c, radius = spot.radiusPx, center = spot.position)
                             }
 
-                            // altri player (placeholder) -> anche loro distribuiti attorno al centro
                             val members = session?.members.orEmpty()
                             members.forEach { m ->
                                 val p = uidToSpawn(m.uid, worldCenter)
@@ -345,7 +416,6 @@ fun GameScreen(
                                 )
                             }
 
-                            // avatar (png), centrato su avatar (WORLD)
                             val dstOffset = IntOffset(
                                 (avatar.x - avatarSizePx / 2f).toInt(),
                                 (avatar.y - avatarSizePx / 2f).toInt()
@@ -361,7 +431,6 @@ fun GameScreen(
             }
         }
 
-        // FOOTER
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -375,7 +444,6 @@ fun GameScreen(
                     activeQuestId = null
                     completed = emptySet()
 
-                    // reset camera (centra avatar)
                     zoom = 1f
                     pan = if (canvasSize.width > 0 && canvasSize.height > 0) {
                         val desired = Offset(
@@ -403,13 +471,10 @@ fun GameScreen(
                     }
                 },
                 enabled = activeQuestId == null && completed.size < questSpots.size
-            ) {
-                Text("Nuova missione")
-            }
+            ) { Text("Nuova missione") }
         }
     }
 
-    // DIALOG quest selezionata
     val sq = selectedQuest
     if (sq != null) {
         val done = sq.id in completed
@@ -434,9 +499,7 @@ fun GameScreen(
                         selectedQuest = null
                     },
                     enabled = !done
-                ) {
-                    Text(if (done) "Ok" else "Attiva")
-                }
+                ) { Text(if (done) "Ok" else "Attiva") }
             },
             dismissButton = {
                 OutlinedButton(onClick = { selectedQuest = null }) { Text("Chiudi") }
@@ -445,10 +508,8 @@ fun GameScreen(
     }
 }
 
-// spawn attorno al centro (deterministico per uid)
 private fun uidToSpawn(uid: String, center: Offset): Offset {
     val h = uid.hashCode()
-    // offset massimo ~200px dal centro
     val dx = ((h % 401) - 200).toFloat()
     val dy = (((h / 7) % 401) - 200).toFloat()
     return Offset(center.x + dx, center.y + dy)
@@ -463,14 +524,11 @@ private fun avatarResId(avatarId: String): Int = when (avatarId.lowercase()) {
     else -> R.drawable.av_fox
 }
 
-// clamp del CENTRO dentro la WORLD map usando half = hitbox
 private fun clampCenter(p: Offset, width: Float, height: Float, half: Float): Offset {
     val x = p.x.coerceIn(half, width - half)
     val y = p.y.coerceIn(half, height - half)
     return Offset(x, y)
 }
-
-// ------------------- CAMERA HELPERS -------------------
 
 private fun clampPan(
     pan: Offset,
@@ -483,24 +541,18 @@ private fun clampPan(
     val worldScaledW = worldW * zoom
     val worldScaledH = worldH * zoom
 
-    val minX: Float
-    val maxX: Float
-    if (worldScaledW <= canvasW) {
-        minX = (canvasW - worldScaledW) / 2f
-        maxX = minX
+    val (minX, maxX) = if (worldScaledW <= canvasW) {
+        val c = (canvasW - worldScaledW) / 2f
+        c to c
     } else {
-        minX = canvasW - worldScaledW
-        maxX = 0f
+        (canvasW - worldScaledW) to 0f
     }
 
-    val minY: Float
-    val maxY: Float
-    if (worldScaledH <= canvasH) {
-        minY = (canvasH - worldScaledH) / 2f
-        maxY = minY
+    val (minY, maxY) = if (worldScaledH <= canvasH) {
+        val c = (canvasH - worldScaledH) / 2f
+        c to c
     } else {
-        minY = canvasH - worldScaledH
-        maxY = 0f
+        (canvasH - worldScaledH) to 0f
     }
 
     return Offset(

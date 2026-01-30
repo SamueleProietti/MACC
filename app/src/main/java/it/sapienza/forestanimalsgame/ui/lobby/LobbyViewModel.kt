@@ -6,16 +6,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.data.model.ChatMessage
+import it.sapienza.forestanimalsgame.data.model.GameState
 import it.sapienza.forestanimalsgame.data.model.Session
 import it.sapienza.forestanimalsgame.data.repository.LobbyRepositoryImpl
-import it.sapienza.forestanimalsgame.data.repository.ProfileRepositoryImpl   // ✅ NEW
+import it.sapienza.forestanimalsgame.data.repository.ProfileRepositoryImpl
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
-import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository     // ✅ NEW
+import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository
 import kotlinx.coroutines.launch
 
 class LobbyViewModel(
     private val repo: LobbyRepository = LobbyRepositoryImpl(),
-    private val profileRepo: ProfileRepository = ProfileRepositoryImpl()     // ✅ NEW
+    private val profileRepo: ProfileRepository = ProfileRepositoryImpl()
 ) : ViewModel() {
 
     private val _sessionId = MutableLiveData<String?>(null)
@@ -33,18 +34,28 @@ class LobbyViewModel(
     private val _loading = MutableLiveData(false)
     val loading: LiveData<Boolean> = _loading
 
-    // ✅ NEW: avatarId dell’utente (default fox)
     private val _avatarId = MutableLiveData("fox")
     val avatarId: LiveData<String> = _avatarId
+
+    // ✅ NEW: stato di gioco caricato da Firestore (snapshot)
+    private val _gameState = MutableLiveData<GameState?>(null)
+    val gameState: LiveData<GameState?> = _gameState
+
+    private val _gameStateLoaded = MutableLiveData(false)
+    val gameStateLoaded: LiveData<Boolean> = _gameStateLoaded
 
     private var removeSessionListener: (() -> Unit)? = null
     private var removeMessagesListener: (() -> Unit)? = null
 
-    private fun currentUid(): String? = FirebaseAuth.getInstance().currentUser?.uid
-    private fun currentName(): String =
-        FirebaseAuth.getInstance().currentUser?.displayName ?: "Player"
+    // ✅ TIMEOUT anti-zombie
+    private val IDLE_TIMEOUT_MS = 10 * 60 * 1000L     // 10 minuti
+    private val IDLE_CHECK_EVERY_MS = 30 * 1000L      // check ogni 30s
+    private var idleJob: kotlinx.coroutines.Job? = null
 
-    // ✅ NEW: carica avatar dal backend (profilo)
+
+    private fun currentUid(): String? = FirebaseAuth.getInstance().currentUser?.uid
+    private fun currentName(): String = FirebaseAuth.getInstance().currentUser?.displayName ?: "Player"
+
     fun loadMyAvatarId() {
         viewModelScope.launch {
             try {
@@ -52,8 +63,27 @@ class LobbyViewModel(
                 val id = prof.avatarId
                 _avatarId.value = if (id.isNullOrBlank()) "fox" else id
             } catch (_: Exception) {
-                // fallback silenzioso: resta "fox"
                 _avatarId.value = _avatarId.value ?: "fox"
+            }
+        }
+    }
+
+    // ✅ RESUME: cerca sessione attiva e si attacca
+    fun resumeMyActiveSession() {
+        val uid = currentUid() ?: return
+
+        viewModelScope.launch {
+            _loading.value = true
+            _error.value = null
+            try {
+                val sid = repo.findActiveSessionForUser(uid)
+                if (!sid.isNullOrBlank()) {
+                    attachToSession(sid)
+                }
+            } catch (e: Exception) {
+                _error.value = e.localizedMessage ?: "Errore resume sessione"
+            } finally {
+                _loading.value = false
             }
         }
     }
@@ -66,7 +96,7 @@ class LobbyViewModel(
             _loading.value = true
             _error.value = null
             try {
-                val id = repo.createSession(uid, currentName())
+                val id = repo.createSession(uid, currentName(), _avatarId.value ?: "fox")
                 attachToSession(id)
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Errore creazione sessione"
@@ -85,7 +115,7 @@ class LobbyViewModel(
             _loading.value = true
             _error.value = null
             try {
-                val ok = repo.joinSession(id.trim(), uid, currentName())
+                val ok = repo.joinSession(id.trim(), uid, currentName(), _avatarId.value ?: "fox")
                 if (!ok) {
                     _error.value = "Impossibile entrare: sessione non trovata o piena"
                 } else {
@@ -105,8 +135,17 @@ class LobbyViewModel(
         removeSessionListener?.invoke()
         removeMessagesListener?.invoke()
 
-        removeSessionListener = repo.listenSession(id) { s -> _session.postValue(s) }
+        removeSessionListener = repo.listenSession(id) { s ->
+            _session.postValue(s)
+
+            if (s == null || s.status == "FINISHED") {
+                // ✅ sessione chiusa (timeout o altro): torna alla entry senza abbandono esplicito
+                detachLocal()
+            }
+        }
         removeMessagesListener = repo.listenMessages(id) { msgs -> _messages.postValue(msgs) }
+
+        startIdleWatcher(id)
     }
 
     fun sendMessage(text: String) {
@@ -133,10 +172,7 @@ class LobbyViewModel(
     }
 
     fun startGameIfHost() {
-        val uid = currentUid()
-        val sid = _sessionId.value
-        if (uid == null || sid == null) return
-
+        val sid = _sessionId.value ?: return
         viewModelScope.launch {
             try {
                 repo.startGameIfHost(sid)
@@ -151,6 +187,9 @@ class LobbyViewModel(
         val sid = _sessionId.value
         if (uid == null || sid == null) return
 
+        idleJob?.cancel()
+        idleJob = null
+
         viewModelScope.launch {
             try {
                 repo.leaveSession(sid, uid)
@@ -162,6 +201,39 @@ class LobbyViewModel(
                 _sessionId.value = null
                 _session.value = null
                 _messages.value = emptyList()
+                _gameState.value = null
+                _gameStateLoaded.value = false
+            }
+        }
+    }
+
+    // ---------------- GAME STATE ----------------
+
+    fun loadMyGameState(sessionId: String) {
+        val uid = currentUid() ?: return
+        
+        // Reset del flag prima di iniziare
+        _gameStateLoaded.value = false 
+        
+        viewModelScope.launch {
+            try {
+                _gameState.value = repo.loadGameState(sessionId, uid)
+            } catch (_: Exception) {
+                _gameState.value = null
+            } finally {
+                // ✅ Segnala che il caricamento è finito (con o senza dati)
+                _gameStateLoaded.value = true
+            }
+        }
+    }
+
+    fun saveMyGameState(sessionId: String, state: GameState) {
+        val uid = currentUid() ?: return
+        viewModelScope.launch {
+            try {
+                repo.saveGameState(sessionId, uid, state)
+            } catch (_: Exception) {
+                // autosave best-effort: non blocchiamo la UI
             }
         }
     }
@@ -169,6 +241,49 @@ class LobbyViewModel(
     override fun onCleared() {
         removeSessionListener?.invoke()
         removeMessagesListener?.invoke()
+
+        idleJob?.cancel()
+        idleJob = null
+
         super.onCleared()
     }
+
+    private fun startIdleWatcher(sessionId: String) {
+        idleJob?.cancel()
+        idleJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    repo.finishSessionIfIdle(sessionId, IDLE_TIMEOUT_MS)
+                } catch (_: Exception) {
+                    // best-effort
+                }
+                kotlinx.coroutines.delay(IDLE_CHECK_EVERY_MS)
+            }
+        }
+    }
+
+    private fun detachLocal() {
+        idleJob?.cancel()
+        idleJob = null
+
+        removeSessionListener?.invoke()
+        removeMessagesListener?.invoke()
+        removeSessionListener = null
+        removeMessagesListener = null
+
+        _sessionId.postValue(null)
+        _session.postValue(null)
+        _messages.postValue(emptyList())
+        _gameState.postValue(null)
+        _gameStateLoaded.postValue(false)
+    }
+
+    // ✅ Save "await": NON usa viewModelScope, così chi lo chiama può aspettare davvero
+    suspend fun saveMyGameStateNow(sessionId: String, state: it.sapienza.forestanimalsgame.data.model.GameState) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        repo.saveGameState(sessionId, uid, state)   // è suspend e fa await
+    }
+
+
+
 }

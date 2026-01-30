@@ -5,10 +5,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 import it.sapienza.forestanimalsgame.data.model.ChatMessage
+import it.sapienza.forestanimalsgame.data.model.GameState
 import it.sapienza.forestanimalsgame.data.model.Member
 import it.sapienza.forestanimalsgame.data.model.Session
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
-import it.sapienza.forestanimalsgame.data.remote.api.ProfileMeResponse
 
 
 class LobbyRepositoryImpl(
@@ -18,19 +18,22 @@ class LobbyRepositoryImpl(
 
     private val sessions = db.collection("sessions")
 
-    override suspend fun createSession(hostUid: String, hostName: String): String {
-        val member = Member(uid = hostUid, displayName = hostName)
+    override suspend fun createSession(hostUid: String, hostName: String, hostAvatarId: String): String {
+        val member = Member(uid = hostUid, displayName = hostName, avatar = hostAvatarId)
+        val now = System.currentTimeMillis()
         val session = Session(
             hostUid = hostUid,
             status = "LOBBY",
             members = listOf(member),
-            createdAt = System.currentTimeMillis()
+            memberUids = listOf(hostUid),
+            createdAt = now,
+            updatedAt = now
         )
         val docRef = sessions.add(session).await()
         return docRef.id
     }
 
-    override suspend fun joinSession(sessionId: String, uid: String, name: String): Boolean {
+    override suspend fun joinSession(sessionId: String, uid: String, name: String, avatarId: String): Boolean {
         val docRef = sessions.document(sessionId)
 
         return db.runTransaction { tx ->
@@ -46,8 +49,18 @@ class LobbyRepositoryImpl(
             // limite pragmatico
             if (members.size >= 4) return@runTransaction false
 
-            members.add(Member(uid = uid, displayName = name))
-            tx.set(docRef, session.copy(members = members))
+            members.add(Member(uid = uid, displayName = name, avatar = avatarId))
+            val newUids = members.map { it.uid }
+            val now = System.currentTimeMillis()
+
+            tx.set(
+                docRef,
+                session.copy(
+                    members = members,
+                    memberUids = newUids,
+                    updatedAt = now
+                )
+            )
             true
         }.await()
     }
@@ -66,7 +79,16 @@ class LobbyRepositoryImpl(
                 tx.delete(docRef)
             } else {
                 val newHost = if (session.hostUid == uid) newMembers.first().uid else session.hostUid
-                tx.set(docRef, session.copy(hostUid = newHost, members = newMembers))
+                val now = System.currentTimeMillis()
+                tx.set(
+                    docRef,
+                    session.copy(
+                        hostUid = newHost,
+                        members = newMembers,
+                        memberUids = newMembers.map { it.uid },
+                        updatedAt = now
+                    )
+                )
             }
         }.await()
     }
@@ -104,6 +126,9 @@ class LobbyRepositoryImpl(
             .collection("messages")
             .add(msg)
             .await()
+
+        // opzionale: bump updatedAt session
+        sessions.document(sessionId).update("updatedAt", System.currentTimeMillis()).await()
     }
 
     override suspend fun startGameIfHost(sessionId: String) {
@@ -116,13 +141,90 @@ class LobbyRepositoryImpl(
 
             if (sess.hostUid != currentUid) throw IllegalStateException("only_host_can_start")
             if (sess.status != "LOBBY") throw IllegalStateException("session_not_in_lobby")
-            if (sess.members.size < 1) throw IllegalStateException("not_enough_players")
+            if (sess.members.isEmpty()) throw IllegalStateException("not_enough_players")
 
-            tx.update(ref, mapOf(
-                "status" to "IN_GAME",
-                "startedAt" to System.currentTimeMillis()
-            ))
+            val now = System.currentTimeMillis()
+            tx.update(
+                ref,
+                mapOf(
+                    "status" to "IN_GAME",
+                    "startedAt" to now,
+                    "updatedAt" to now
+                )
+            )
             null
         }.await()
     }
+
+    // ---------------- RESUME SESSION ----------------
+
+    override suspend fun findActiveSessionForUser(uid: String): String? {
+        // ✅ niente indici complessi: una sola whereArrayContains
+        val snap = sessions
+            .whereArrayContains("memberUids", uid)
+            .limit(20)
+            .get()
+            .await()
+
+        val candidates = snap.documents.mapNotNull { doc ->
+            val s = doc.toObject(Session::class.java) ?: return@mapNotNull null
+            doc.id to s
+        }.filter { (_, s) ->
+            s.status != "FINISHED"
+        }
+
+        // scegli la più recente (startedAt se c’è, altrimenti createdAt)
+        return candidates.maxByOrNull { (_, s) -> (s.startedAt ?: s.createdAt) }?.first
+    }
+
+    // ---------------- GAME STATE (autosave) ----------------
+
+    override suspend fun loadGameState(sessionId: String, uid: String): GameState? {
+        val doc = sessions.document(sessionId)
+            .collection("gameState")
+            .document(uid)
+            .get()
+            .await()
+
+        return if (doc.exists()) doc.toObject(GameState::class.java) else null
+    }
+
+    override suspend fun saveGameState(sessionId: String, uid: String, state: GameState) {
+        sessions.document(sessionId)
+            .collection("gameState")
+            .document(uid)
+            .set(state.copy(updatedAt = System.currentTimeMillis()))
+            .await()
+
+        // opzionale: bump updatedAt session
+        sessions.document(sessionId).update("updatedAt", System.currentTimeMillis()).await()
+    }
+
+    override suspend fun finishSessionIfIdle(sessionId: String, idleTimeoutMs: Long): Boolean {
+        val ref = sessions.document(sessionId)
+        val now = System.currentTimeMillis()
+
+        return db.runTransaction { tx ->
+            val snap = tx.get(ref)
+            if (!snap.exists()) return@runTransaction false
+
+            val sess = snap.toObject(Session::class.java) ?: return@runTransaction false
+            if (sess.status == "FINISHED") return@runTransaction false
+
+            val updatedAt = sess.updatedAt
+            val idle = now - updatedAt
+            if (idle < idleTimeoutMs) return@runTransaction false
+
+            // ✅ chiusura zombie: chiunque può farla se davvero idle (semplice e robusto)
+            tx.update(
+                ref,
+                mapOf(
+                    "status" to "FINISHED",
+                    "updatedAt" to now
+                )
+            )
+            true
+        }.await()
+    }
+
 }
