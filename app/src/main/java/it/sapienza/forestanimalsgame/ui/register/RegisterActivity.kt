@@ -226,7 +226,7 @@ fun RegisterScreen(
 
             if (!error.isNullOrBlank()) {
                 Spacer(Modifier.height(16.dp))
-                Text(error!!, color = MaterialTheme.colorScheme.error)
+                //Text(error!!, color = MaterialTheme.colorScheme.error)
             }
 
             Spacer(Modifier.height(24.dp))
