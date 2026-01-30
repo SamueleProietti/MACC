@@ -11,6 +11,7 @@ import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 
 class RegisterViewModel(
     private val repo: ProfileRepository = ProfileRepositoryImpl()
@@ -43,34 +44,45 @@ class RegisterViewModel(
 
     fun loadMyProfile() {
         viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
+            _error.value = null // Resetta errori precedenti
+            // loading è già true dall'inizializzazione, ma se vuoi puoi rimetterlo a true qui
+            
             try {
-                val prof = withContext(Dispatchers.IO) { repo.getMyProfile() }
-
-                // location
-                val lat = prof.lat
-                val lng = prof.lng
-                if (lat != null && lng != null) {
-                    _location.value = Location("backend").apply {
-                        latitude = lat
-                        longitude = lng
-                    }
+                val profile = repo.getMyProfile()
+                
+                // Se arriva qui, è un 200 OK -> Utente esistente
+                // Carichiamo i dati nei campi
+                _photoUrl.value = profile.photoUrl
+                
+                if (profile.lat != null && profile.lng != null) {
+                    val l = Location("provider")
+                    l.latitude = profile.lat
+                    l.longitude = profile.lng
+                    _location.value = l
+                }
+                
+                if (profile.avatarId != null) {
+                    _avatarId.value = profile.avatarId
                 }
 
-                // photoUrl
-                _photoUrl.value = prof.photoUrl
-
-                // avatar
-                _avatarId.value = prof.avatarId ?: "fox"
-
-                // IMPORTANT: quando rientri, la bitmap locale non c’è più
-                _photo.value = null
+                // Se il profilo è completo, segnaliamo che abbiamo finito (opzionale)
+                // _done.value = true 
 
             } catch (e: Exception) {
-                // Se il profilo non esiste ancora, può tornare 404: gestiscilo senza bloccare
-                _error.value = e.localizedMessage
+                // 🔍 ANALISI DELL'ERRORE
+                if (e is HttpException && e.code() == 404) {
+                    // ✅ CASO 404: NUOVO UTENTE
+                    // Non fare nulla! Non è un errore. 
+                    // L'app resterà con i campi vuoti pronti per essere compilati.
+                    // (Logghiamo solo per noi sviluppatori se serve)
+                    println("Nuovo utente rilevato (404), mostro form vuoto.")
+                } else {
+                    // ❌ ALTRI ERRORI (500, 401, 403, ecc.)
+                    // Questi sono problemi veri, mostriamoli all'utente.
+                    _error.value = "Errore caricamento: ${e.localizedMessage}"
+                }
             } finally {
+                // In ogni caso (successo, 404 o errore 500), togliamo la rotella
                 _loading.value = false
             }
         }
