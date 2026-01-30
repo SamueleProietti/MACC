@@ -2,12 +2,12 @@ import os
 import requests
 from flask import Blueprint, request, jsonify
 
-weather_bp = Blueprint('weather', __name__)
+bp = Blueprint('weather', __name__)
 
 # ⚠️ IMPORTANTE: Imposta questa variabile d'ambiente su Cloud Run!
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '182738ed665b62581689fc150adcd8a5')
 
-@weather_bp.route('/v1/weather', methods=['GET'])
+@bp.route('/v1/weather', methods=['GET'])
 def get_weather():
     lat = request.args.get('lat')
     lng = request.args.get('lng')
