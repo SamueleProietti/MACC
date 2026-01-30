@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -33,10 +35,17 @@ import it.sapienza.forestanimalsgame.ui.theme.ForestAnimalsGameTheme
 import it.sapienza.forestanimalsgame.ui.register.RegisterActivity
 import it.sapienza.forestanimalsgame.ui.lobby.LobbyActivity
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import it.sapienza.forestanimalsgame.data.repository.ProfileRepositoryImpl
 
 class MainActivity : ComponentActivity() {
 
     private val authViewModel: AuthViewModel by viewModels()
+    // Creiamo un'istanza del repository per controllare il profilo
+    private val profileRepository = ProfileRepositoryImpl()
     private lateinit var credentialManager: CredentialManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,14 +58,38 @@ class MainActivity : ComponentActivity() {
                 val currentUser = authViewModel.currentUser
                 val isLoading = authViewModel.isLoading
                 val errorMessage = authViewModel.errorMessage
+                // Stato per il Dialog di avviso
+                var showProfileAlert by remember { mutableStateOf(false) }
+                // Stato per il caricamento durante il controllo profilo
+                var isCheckingProfile by remember { mutableStateOf(false) }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
+
+                    // Mostra Alert se l'utente prova a giocare senza profilo
+                    if (showProfileAlert) {
+                        AlertDialog(
+                            onDismissRequest = { showProfileAlert = false },
+                            title = { Text("Profilo Incompleto") },
+                            text = { Text("Per entrare in Lobby devi prima completare il profilo (Posizione e Foto).") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showProfileAlert = false
+                                    startActivity(Intent(this@MainActivity, RegisterActivity::class.java))
+                                }) {
+                                    Text("Vai al Profilo")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showProfileAlert = false }) {
+                                    Text("Annulla")
+                                }
+                            }
+                        )
+                    }
+                    
                     when {
-                        isLoading -> {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
+                        isLoading || isCheckingProfile -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator()
                             }
                         }
@@ -83,7 +116,31 @@ class MainActivity : ComponentActivity() {
                                     startActivity(Intent(this, RegisterActivity::class.java))
                                 },
                                 onOpenLobby = {
-                                    startActivity(Intent(this, LobbyActivity::class.java))
+                                    // 🚀 LOGICA DI CONTROLLO PRE-LOBBY
+                                    lifecycleScope.launch {
+                                        isCheckingProfile = true
+                                        try {
+                                            // Chiediamo al backend i dati del profilo
+                                            val profile = profileRepository.getMyProfile()
+                                            
+                                            // Controlliamo se è completo (Ha foto? Ha coordinate?)
+                                            val hasPhoto = !profile.photoUrl.isNullOrBlank()
+                                            val hasLoc = profile.lat != null && profile.lng != null
+                                            
+                                            if (hasPhoto && hasLoc) {
+                                                // Tutto ok, entra in Lobby
+                                                startActivity(Intent(this@MainActivity, LobbyActivity::class.java))
+                                            } else {
+                                                // Profilo incompleto -> Mostra Popup
+                                                showProfileAlert = true
+                                            }
+                                        } catch (e: Exception) {
+                                            // Se il profilo non esiste (es. 404) o errore di rete -> Mostra Popup
+                                            showProfileAlert = true
+                                        } finally {
+                                            isCheckingProfile = false
+                                        }
+                                    }
                                 }
                             )
                         }

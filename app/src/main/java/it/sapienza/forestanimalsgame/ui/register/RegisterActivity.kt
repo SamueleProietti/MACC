@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.Icons
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +33,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -128,26 +136,46 @@ fun RegisterScreen(
         Button(onClick = onTakePhoto) { Text("Scatta foto") }
 
         Spacer(Modifier.height(8.dp))
-        Text("Foto: " + (if (photo != null) "OK" else "manca"))
+        Text("Foto: " + (if (photo != null || !photoUrl.isNullOrBlank()) "OK" else "Obbligatoria"))
 
-        // ✅ mostra la foto: prima bitmap locale, altrimenti URL dal backend
-        when {
-            photo != null -> {
-                Spacer(Modifier.height(12.dp))
-                Image(
-                    bitmap = photo!!.asImageBitmap(),
-                    contentDescription = "Foto profilo",
-                    modifier = Modifier.height(160.dp)
-                )
-            }
-
-            !photoUrl.isNullOrBlank() -> {
-                Spacer(Modifier.height(12.dp))
-                AsyncImage(
-                    model = photoUrl,
-                    contentDescription = "Foto profilo",
-                    modifier = Modifier.height(160.dp)
-                )
+        Box(
+            modifier = Modifier
+                .height(160.dp)
+                .width(160.dp) // Facciamola quadrata o tonda
+                .border(1.dp, MaterialTheme.colorScheme.outline),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                // Caso 1: Nuova foto appena scattata
+                photo != null -> {
+                    Image(
+                        bitmap = photo!!.asImageBitmap(),
+                        contentDescription = "Foto profilo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                // Caso 2: Foto esistente dal server
+                !photoUrl.isNullOrBlank() -> {
+                    AsyncImage(
+                        model = photoUrl,
+                        contentDescription = "Foto profilo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                // Caso 3: Placeholder (Nessuna foto)
+                else -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Person, // O una risorsa R.drawable
+                            contentDescription = "Manca foto",
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text("Nessuna foto", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         }
 

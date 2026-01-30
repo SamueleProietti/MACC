@@ -80,10 +80,18 @@ class RegisterViewModel(
         val loc = _location.value
         val avatar = _avatarId.value ?: "fox"
         val bitmap = _photo.value
+        val currentUrl = _photoUrl.value
 
-        // se non ho location né una già salvata (dopo loadMyProfile), non posso salvare
+        // 1. Controllo Posizione
         if (loc == null) {
-            _error.value = "Posizione non disponibile"
+            _error.value = "Posizione non disponibile. Clicca su Aggiorna posizione."
+            return
+        }
+
+        // 2. Controllo Foto (Obbligatoria!)
+        // Deve esserci o una nuova foto (bitmap) o una vecchia già salvata (currentUrl)
+        if (bitmap == null && currentUrl.isNullOrBlank()) {
+            _error.value = "Devi scattare una foto per completare il profilo!"
             return
         }
 
