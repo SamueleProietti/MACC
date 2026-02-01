@@ -47,15 +47,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.hypot
 import kotlin.math.max
 
-// --- CONFIGURAZIONE DEBUG E OFFSET ---
-const val DEBUG_MODE = true // 🔥 VEDI CERCHI ROSSI/BLU PER DEBUG (Metti false per nasconderli)
+// --- CONFIGURAZIONE ---
+const val DEBUG_MODE = false // Metti true se vuoi vedere i cerchi di debug
 const val AVATAR_SIZE_PX = 150f
+// Calibrazione: Quanto spostare l'immagine affinché i "piedi" siano sul punto cliccato
+const val DRAW_OFFSET_Y = 15f
 
-// Calibrazione fine della posizione immagine rispetto al punto logico (piedi)
-const val DRAW_OFFSET_X = 0f
-const val DRAW_OFFSET_Y = 10f // Sposta l'immagine verticalmente rispetto al punto di contatto
-
-// --- SAVERS ---
 private val OffsetSaver: Saver<Offset, ArrayList<Float>> = Saver(
     save = { arrayListOf(it.x, it.y) },
     restore = { Offset(it[0], it[1]) }
@@ -88,7 +85,6 @@ fun GameScreen(
     session: Session?,
     avatarId: String,
     initialGameState: GameState?,
-    // Parametri Meteo
     currentWeather: String = "clear",
     isNightTime: Boolean = false,
     onAutoSave: (GameState) -> Unit,
@@ -114,8 +110,9 @@ fun GameScreen(
 
     val staticScenery = remember(worldSize) { generateForestScenery(worldSize, 250) }
 
-    // 3. STATO (Usa State Object per evitare stale closures)
-    val zoomState = rememberSaveable { mutableStateOf(1.3f) }
+    // 3. STATO
+    // Zoom di default a 1.5f per partire vicini
+    val zoomState = rememberSaveable { mutableStateOf(1f) }
     val panState = rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(Offset.Zero) }
 
     var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
@@ -135,7 +132,6 @@ fun GameScreen(
         )
     }
 
-    // Variabili Test
     var testWeather by remember { mutableStateOf(currentWeather) }
     var testNight by remember { mutableStateOf(isNightTime) }
 
@@ -157,7 +153,8 @@ fun GameScreen(
         hydrated = true
     }
 
-    // FIX CAMERA BOUNDS
+    // GESTIONE LIMITI ZOOM & PAN
+    // Appena cambia la dimensione dello schermo o lo zoom, ricalcoliamo il pan sicuro
     LaunchedEffect(canvasSize, zoomState.value) {
         if (canvasSize.width > 0 && canvasSize.height > 0) {
             val safePan = clampPanStrict(panState.value, canvasSize.width.toFloat(), canvasSize.height.toFloat(), worldSize.width, worldSize.height, zoomState.value)
@@ -165,7 +162,7 @@ fun GameScreen(
         }
     }
 
-    // INIT CAMERA
+    // Inizializza camera al centro avatar al primo avvio
     var cameraInitialized by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(canvasSize, sessionId) {
         if (!cameraInitialized && canvasSize.width > 0) {
@@ -208,10 +205,8 @@ fun GameScreen(
         }
     }
 
-    // Autosave
     LaunchedEffect(sessionId, currentUid) {
         snapshotFlow {
-            // Usiamo .value qui
             listOf(avatar.x, avatar.y, target.x, target.y, zoomState.value, panState.value.x, panState.value.y, activeQuestId, completed.size)
         }
             .distinctUntilChanged()
@@ -229,214 +224,252 @@ fun GameScreen(
             }
     }
 
-    // UI
-    Column(modifier = Modifier.fillMaxSize()) {
+    // --- UI LAYOUT ---
+    // Usiamo Box come contenitore principale per sovrapporre Mappa e UI
+    Box(modifier = Modifier.fillMaxSize()) {
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text("Foresta (Debug)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if(DEBUG_MODE) {
-                    Text("Target: ${target.x.toInt()}, ${target.y.toInt()}", style = MaterialTheme.typography.labelSmall)
-                } else {
-                    Text("Status: ${session?.status ?: "..."}", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    testWeather = when(testWeather) {
-                        "clear" -> "rain"
-                        "rain" -> "snow"
-                        else -> "clear"
+        // 1. MAPPA (Sotto tutto)
+        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF2E7D32)) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTransformGestures { centroid, panChange, zoomChange, _ ->
+                            val oldZoom = zoomState.value
+                            val currentPan = panState.value
+
+                            val cw = canvasSize.width.toFloat()
+                            val ch = canvasSize.height.toFloat()
+
+                            // CALCOLO MIN ZOOM DINAMICO
+                            // Lo zoom minimo deve essere tale che worldSize * zoom >= screenSize
+                            // Quindi zoom >= screenSize / worldSize
+                            val minZoomX = cw / worldSize.width
+                            val minZoomY = ch / worldSize.height
+                            val calculatedMinZoom = max(minZoomX, minZoomY)
+                            // Max zoom fisso a 3.5x
+                            val calculatedMaxZoom = 3.5f
+
+                            // Se lo schermo è ridimensionato, assicurati che il currentZoom non sia illegale
+                            val safeOldZoom = oldZoom.coerceIn(calculatedMinZoom, calculatedMaxZoom)
+
+                            val newZoom = (safeOldZoom * zoomChange).coerceIn(calculatedMinZoom, calculatedMaxZoom)
+                            val zoomFactor = newZoom / safeOldZoom
+                            val tentativePan = currentPan + panChange + (centroid - currentPan) * (1 - zoomFactor)
+
+                            zoomState.value = newZoom
+                            panState.value = clampPanStrict(tentativePan, cw, ch, worldSize.width, worldSize.height, newZoom)
+                        }
                     }
-                }) { Text("Meteo") }
+                    .pointerInput(Unit) {
+                        detectTapGestures { tap ->
+                            val currentZoom = zoomState.value
+                            val currentPan = panState.value
 
-                OutlinedButton(onClick = { testNight = !testNight }) { Text("Orario") }
+                            val worldTap = (tap - currentPan) / currentZoom
 
-                Button(onClick = onLeave, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("X") }
-            }
-        }
+                            val hitQuest = questSpots.firstOrNull { spot ->
+                                hypot((worldTap.x - spot.position.x).toDouble(), (worldTap.y - spot.position.y).toDouble()) <= spot.radiusPx
+                            }
 
-        if (activeQuestId != null) {
-            val spot = questSpots.firstOrNull { it.id == activeQuestId }
-            if (spot != null) {
-                Card(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Text("Obiettivo: ${spot.title}", modifier = Modifier.padding(8.dp))
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier.fillMaxWidth().weight(1f)
-        ) {
-            Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF2E7D32)) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTransformGestures { centroid, panChange, zoomChange, _ ->
-                                // FIX: Usiamo .value per leggere lo stato attuale SENZA dipendere dalla closure iniziale
-                                val oldZoom = zoomState.value
-                                val currentPan = panState.value
-
-                                val minZoomX = canvasSize.width.toFloat() / worldSize.width
-                                val minZoomY = canvasSize.height.toFloat() / worldSize.height
-                                val calculatedMinZoom = max(minZoomX, minZoomY).coerceAtLeast(0.5f)
-                                val calculatedMaxZoom = 3.5f
-
-                                val newZoom = (oldZoom * zoomChange).coerceIn(calculatedMinZoom, calculatedMaxZoom)
-                                val zoomFactor = newZoom / oldZoom
-                                val tentativePan = currentPan + panChange + (centroid - currentPan) * (1 - zoomFactor)
-
-                                zoomState.value = newZoom
-                                panState.value = clampPanStrict(tentativePan, canvasSize.width.toFloat(), canvasSize.height.toFloat(), worldSize.width, worldSize.height, newZoom)
+                            if (hitQuest != null) {
+                                selectedQuest = hitQuest
+                            } else {
+                                target = clampCenter(worldTap, worldSize.width, worldSize.height)
                             }
                         }
-                        .pointerInput(Unit) {
-                            detectTapGestures { tap ->
-                                // FIX CRUCIALE: Usare i valori correnti (.value)
-                                val currentZoom = zoomState.value
-                                val currentPan = panState.value
-
-                                val worldTap = (tap - currentPan) / currentZoom
-
-                                val hitQuest = questSpots.firstOrNull { spot ->
-                                    hypot((worldTap.x - spot.position.x).toDouble(), (worldTap.y - spot.position.y).toDouble()) <= spot.radiusPx
-                                }
-
-                                if (hitQuest != null) {
-                                    selectedQuest = hitQuest
-                                } else {
-                                    target = clampCenter(worldTap, worldSize.width, worldSize.height)
-                                }
-                            }
-                        }
-                ) {
-                    if (size.width > 0 && size.height > 0) {
-                        canvasSize = IntSize(size.width.toInt(), size.height.toInt())
                     }
+            ) {
+                if (size.width > 0 && size.height > 0) {
+                    canvasSize = IntSize(size.width.toInt(), size.height.toInt())
+                }
 
-                    // Leggiamo lo stato per il disegno
-                    val currentZoom = zoomState.value
-                    val currentPan = panState.value
+                val currentZoom = zoomState.value
+                val currentPan = panState.value
 
-                    withTransform({
-                        translate(currentPan.x, currentPan.y)
-                        scale(currentZoom, currentZoom)
-                    }) {
-                        val viewLeft = -currentPan.x / currentZoom
-                        val viewTop = -currentPan.y / currentZoom
-                        val viewRight = viewLeft + size.width / currentZoom
-                        val viewBottom = viewTop + size.height / currentZoom
-                        val visibleRect = androidx.compose.ui.geometry.Rect(viewLeft, viewTop, viewRight, viewBottom)
+                withTransform({
+                    translate(currentPan.x, currentPan.y)
+                    scale(currentZoom, currentZoom)
+                }) {
+                    val viewLeft = -currentPan.x / currentZoom
+                    val viewTop = -currentPan.y / currentZoom
+                    val viewRight = viewLeft + size.width / currentZoom
+                    val viewBottom = viewTop + size.height / currentZoom
+                    val visibleRect = androidx.compose.ui.geometry.Rect(viewLeft, viewTop, viewRight, viewBottom)
 
-                        drawTerrain(worldSize, terrainTile, visibleRect)
-                        val pathPoints = questSpots.map { it.position }
-                        drawPaths(pathPoints, pathTile)
+                    drawTerrain(worldSize, terrainTile, visibleRect)
+                    val pathPoints = questSpots.map { it.position }
+                    drawPaths(pathPoints, pathTile)
 
-                        val drawQueue = ArrayList<DrawableItem>()
+                    val drawQueue = ArrayList<DrawableItem>()
 
-                        // SCENERY
-                        staticScenery.forEach { obj ->
-                            if (obj.x in (viewLeft - 300)..(viewRight + 300) &&
-                                obj.y in (viewTop - 300)..(viewBottom + 300)) {
-                                val bmp = forestResources[obj.type]
-                                if (bmp != null) {
-                                    drawQueue.add(object : DrawableItem {
-                                        override val y = obj.y
-                                        override fun draw(scope: DrawScope) {
-                                            val w = bmp.width * obj.scale
-                                            val h = bmp.height * obj.scale
-                                            scope.drawImage(image = bmp, dstOffset = IntOffset((obj.x - w/2).toInt(), (obj.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()), colorFilter = vividFilter)
-                                        }
-                                    })
-                                }
-                            }
-                        }
-
-                        // QUESTS
-                        questSpots.forEach { quest ->
-                            drawQueue.add(object : DrawableItem {
-                                override val y = quest.position.y
-                                override fun draw(scope: DrawScope) {
-                                    val isCompleted = quest.id in completed
-                                    val alpha = if (isCompleted) 0.5f else 1f
-                                    val scale = 3.5f
-                                    val w = signBitmap.width.toFloat() * scale
-                                    val h = signBitmap.height.toFloat() * scale
-                                    scope.drawImage(image = signBitmap, dstOffset = IntOffset((quest.position.x - w/2).toInt(), (quest.position.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()), alpha = alpha)
-                                }
-                            })
-                        }
-
-                        // AVATAR
-                        drawQueue.add(object : DrawableItem {
-                            override val y = avatar.y + 20f
-                            override fun draw(scope: DrawScope) {
-                                scope.drawImage(
-                                    image = avatarBitmap,
-                                    // Disegno centrato su X, piedi su Y con offset
-                                    dstOffset = IntOffset(
-                                        (avatar.x - AVATAR_SIZE_PX/2 + DRAW_OFFSET_X).toInt(),
-                                        (avatar.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()
-                                    ),
-                                    dstSize = IntSize(AVATAR_SIZE_PX.toInt(), AVATAR_SIZE_PX.toInt())
-                                )
-                            }
-                        })
-
-                        // PLAYERS
-                        session?.members?.forEach { m ->
-                            if (m.uid != currentUid) {
-                                val pos = uidToSpawn(m.uid, worldCenter)
+                    // Scenery
+                    staticScenery.forEach { obj ->
+                        // Culling con margine più ampio
+                        if (obj.x in (viewLeft - 400)..(viewRight + 400) &&
+                            obj.y in (viewTop - 400)..(viewBottom + 400)) {
+                            val bmp = forestResources[obj.type]
+                            if (bmp != null) {
                                 drawQueue.add(object : DrawableItem {
-                                    override val y = pos.y + 20f
+                                    override val y = obj.y
                                     override fun draw(scope: DrawScope) {
-                                        scope.drawImage(image = avatarBitmap, dstOffset = IntOffset((pos.x - AVATAR_SIZE_PX/2).toInt(), (pos.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()), dstSize = IntSize(AVATAR_SIZE_PX.toInt(), AVATAR_SIZE_PX.toInt()), alpha = 0.6f)
+                                        val w = bmp.width * obj.scale
+                                        val h = bmp.height * obj.scale
+                                        scope.drawImage(image = bmp, dstOffset = IntOffset((obj.x - w/2).toInt(), (obj.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()), colorFilter = vividFilter)
                                     }
                                 })
                             }
                         }
+                    }
 
-                        drawQueue.sortBy { it.y }
-                        drawQueue.forEach { it.draw(this) }
+                    // Quest
+                    questSpots.forEach { quest ->
+                        drawQueue.add(object : DrawableItem {
+                            override val y = quest.position.y
+                            override fun draw(scope: DrawScope) {
+                                val isCompleted = quest.id in completed
+                                val alpha = if (isCompleted) 0.5f else 1f
+                                val scale = 3.5f
+                                val w = signBitmap.width.toFloat() * scale
+                                val h = signBitmap.height.toFloat() * scale
+                                scope.drawImage(image = signBitmap, dstOffset = IntOffset((quest.position.x - w/2).toInt(), (quest.position.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()), alpha = alpha)
+                            }
+                        })
+                    }
 
-                        // 🔴 DEBUG VISIVO: Verifica che i punti coincidano
-                        if (DEBUG_MODE) {
-                            drawCircle(Color.Red, radius = 10f, center = target, style = Stroke(width=3f)) // Click REALE
-                            drawCircle(Color.Blue, radius = 15f, center = avatar, style = Stroke(width=3f)) // Posizione LOGICA
-                            drawLine(Color.Green, start = avatar, end = target, strokeWidth = 2f)
+                    // Avatar
+                    drawQueue.add(object : DrawableItem {
+                        override val y = avatar.y + 20f
+                        override fun draw(scope: DrawScope) {
+                            scope.drawImage(
+                                image = avatarBitmap,
+                                // Offset Y per centrare i piedi sul punto
+                                dstOffset = IntOffset(
+                                    (avatar.x - AVATAR_SIZE_PX/2).toInt(),
+                                    (avatar.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()
+                                ),
+                                dstSize = IntSize(AVATAR_SIZE_PX.toInt(), AVATAR_SIZE_PX.toInt())
+                            )
                         }
+                    })
+
+                    // Players
+                    session?.members?.forEach { m ->
+                        if (m.uid != currentUid) {
+                            val pos = uidToSpawn(m.uid, worldCenter)
+                            drawQueue.add(object : DrawableItem {
+                                override val y = pos.y + 20f
+                                override fun draw(scope: DrawScope) {
+                                    scope.drawImage(image = avatarBitmap, dstOffset = IntOffset((pos.x - AVATAR_SIZE_PX/2).toInt(), (pos.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()), dstSize = IntSize(AVATAR_SIZE_PX.toInt(), AVATAR_SIZE_PX.toInt()), alpha = 0.6f)
+                                }
+                            })
+                        }
+                    }
+
+                    drawQueue.sortBy { it.y }
+                    drawQueue.forEach { it.draw(this) }
+
+                    if (DEBUG_MODE) {
+                        drawCircle(Color.Red, radius = 10f, center = target, style = Stroke(width=3f))
+                        drawCircle(Color.Blue, radius = 15f, center = avatar, style = Stroke(width=3f))
+                        drawLine(Color.Green, start = avatar, end = target, strokeWidth = 2f)
+                    }
+                }
+            }
+        }
+
+        // 2. LAYER METEO (Sopra mappa, sotto UI)
+        // Ignorano il padding di sistema per coprire tutto
+        when (testWeather) {
+            "rain" -> RainOverlay()
+            "snow" -> SnowOverlay()
+        }
+        DayNightOverlay(isNight = testNight)
+
+        // 3. UI OVERLAY (Pulsanti e HUD)
+        // ✅ RESPONSIVE FIX: systemBarsPadding() sposta la UI sotto la status bar/notch
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding() // Questo evita che la UI finisca sotto la fotocamera o nav bar
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // TOP BAR
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // Sinistra: Info e Orario
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // HUD Orario
+                    TimeHUD(testNight)
+
+                    // Info Testo (opzionale)
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha=0.8f))) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Text("Foresta", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("Status: ${session?.status ?: "..."}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                // Destra: Meteo e Controlli
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+                    WeatherHUD(testWeather)
+
+                    // Bottoni Test (Raggruppati)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = {
+                                testWeather = when(testWeather) { "clear" -> "rain"; "rain" -> "snow"; else -> "clear" }
+                            },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.width(60.dp)
+                        ) { Text("W") } // W = Weather
+
+                        Button(
+                            onClick = { testNight = !testNight },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.width(60.dp)
+                        ) { Text("T") } // T = Time
+
+                        Button(
+                            onClick = onLeave,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.width(60.dp)
+                        ) { Text("X") }
                     }
                 }
             }
 
-            when (testWeather) {
-                "rain" -> RainOverlay()
-                "snow" -> SnowOverlay()
+            // BOTTOM BAR
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        avatar = spawn; target = spawn; zoomState.value = 1.3f
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha=0.9f))
+                ) { Text("Reset") }
+
+                Button(
+                    onClick = {
+                        val next = questSpots.firstOrNull { it.id !in completed }
+                        if (next != null) { activeQuestId = next.id; target = next.position }
+                    },
+                    enabled = activeQuestId == null && completed.size < questSpots.size
+                ) { Text("Nuova Missione") }
             }
-            DayNightOverlay(isNight = testNight)
-
-            Box(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) { TimeHUD(testNight) }
-            Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) { WeatherHUD(testWeather) }
-        }
-
-        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            OutlinedButton(onClick = { avatar = spawn; target = spawn; zoomState.value = 1.3f }) { Text("Reset") }
-            Button(onClick = {
-                val next = questSpots.firstOrNull { it.id !in completed }
-                if (next != null) { activeQuestId = next.id; target = next.position }
-            }, enabled = activeQuestId == null && completed.size < questSpots.size) { Text("Nuova Missione") }
         }
     }
 
-    // ... Dialogs ...
+    // Dialogs
     val sq = selectedQuest
     if (sq != null) {
         AlertDialog(
@@ -497,9 +530,19 @@ private fun clampCenter(p: Offset, width: Float, height: Float): Offset {
 private fun clampPanStrict(pan: Offset, canvasW: Float, canvasH: Float, worldW: Float, worldH: Float, zoom: Float): Offset {
     val scaledWorldW = worldW * zoom
     val scaledWorldH = worldH * zoom
+
+    // LOGICA DI CLAMPING RIGIDO:
+    // Se la mappa è più grande dello schermo (normale), il pan deve stare tra [canvasW - scaledW, 0]
+    // Se la mappa è più piccola (solo se minZoom è calcolato male, ma qui lo preveniamo), centra la mappa.
+
     val minX = if (scaledWorldW > canvasW) canvasW - scaledWorldW else (canvasW - scaledWorldW) / 2
     val maxX = if (scaledWorldW > canvasW) 0f else (canvasW - scaledWorldW) / 2
+
     val minY = if (scaledWorldH > canvasH) canvasH - scaledWorldH else (canvasH - scaledWorldH) / 2
     val maxY = if (scaledWorldH > canvasH) 0f else (canvasH - scaledWorldH) / 2
-    return Offset(pan.x.coerceIn(minX, maxX), pan.y.coerceIn(minY, maxY))
+
+    return Offset(
+        pan.x.coerceIn(minX, maxX),
+        pan.y.coerceIn(minY, maxY)
+    )
 }

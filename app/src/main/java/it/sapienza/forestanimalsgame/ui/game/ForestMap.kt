@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import it.sapienza.forestanimalsgame.R
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.random.Random
 
@@ -32,7 +33,7 @@ enum class SceneryType {
 fun rememberForestResources(): Map<SceneryType, ImageBitmap> {
     val pine = ImageBitmap.imageResource(R.drawable.tree)
     val oak = ImageBitmap.imageResource(R.drawable.tree)
-    val bush = ImageBitmap.imageResource(R.drawable.tree)
+    val bush = ImageBitmap.imageResource(R.drawable.tree) // Assicurati di avere 2chiome.png o usa tree
     val rock = ImageBitmap.imageResource(R.drawable.roccia)
     val mushRed = ImageBitmap.imageResource(R.drawable.funghetto1)
     val mushGroup = ImageBitmap.imageResource(R.drawable.funghi3)
@@ -60,7 +61,7 @@ fun rememberTerrainTile(): ImageBitmap {
 
 @Composable
 fun rememberPathTile(): ImageBitmap {
-    return ImageBitmap.imageResource(R.drawable.terreno_centro)
+    return ImageBitmap.imageResource(R.drawable.sentiero_64x32)
 }
 
 // 1. Disegna solo il terreno (Livello 0)
@@ -71,19 +72,16 @@ fun DrawScope.drawTerrain(
 ) {
     val tileSize = 128f
 
-    val maxCols = ceil(worldSize.width / tileSize).toInt()
-    val maxRows = ceil(worldSize.height / tileSize).toInt()
+    // Calcoliamo indici sicuri con un buffer di 2 tile extra per lato
+    // floor/ceil garantiscono che copriamo anche le frazioni di pixel
+    val startCol = (floor(visibleRect.left / tileSize).toInt() - 2).coerceAtLeast(0)
+    val endCol = (ceil(visibleRect.right / tileSize).toInt() + 2).coerceAtMost((worldSize.width / tileSize).toInt())
 
-    val startCol = (visibleRect.left / tileSize).toInt() - 1
-    val endCol = ceil(visibleRect.right / tileSize).toInt() + 1
-    val startRow = (visibleRect.top / tileSize).toInt() - 1
-    val endRow = ceil(visibleRect.bottom / tileSize).toInt() + 1
+    val startRow = (floor(visibleRect.top / tileSize).toInt() - 2).coerceAtLeast(0)
+    val endRow = (ceil(visibleRect.bottom / tileSize).toInt() + 2).coerceAtMost((worldSize.height / tileSize).toInt())
 
     for (row in startRow..endRow) {
-        if (row < -1 || row > maxRows + 1) continue
         for (col in startCol..endCol) {
-            if (col < -1 || col > maxCols + 1) continue
-
             drawImage(
                 image = terrainTile,
                 dstOffset = IntOffset((col * tileSize).toInt(), (row * tileSize).toInt()),
@@ -93,14 +91,14 @@ fun DrawScope.drawTerrain(
     }
 }
 
-// 2. Disegna i sentieri che collegano le missioni (Livello 1)
+// 2. Disegna i sentieri
 fun DrawScope.drawPaths(
     points: List<Offset>,
     pathTile: ImageBitmap
 ) {
     if (points.size < 2) return
 
-    val pathSpacing = 40f // Distanza tra una pietra e l'altra del sentiero
+    val pathSpacing = 40f
 
     for (i in 0 until points.size - 1) {
         val start = points[i]
@@ -109,6 +107,8 @@ fun DrawScope.drawPaths(
         val dist = hypot((end.x - start.x).toDouble(), (end.y - start.y).toDouble()).toFloat()
         val steps = (dist / pathSpacing).toInt()
 
+        if (steps == 0) continue
+
         val dx = (end.x - start.x) / steps
         val dy = (end.y - start.y) / steps
 
@@ -116,7 +116,6 @@ fun DrawScope.drawPaths(
             val px = start.x + dx * j
             val py = start.y + dy * j
 
-            // Disegna il sentiero centrato
             drawImage(
                 image = pathTile,
                 dstOffset = IntOffset((px - pathTile.width / 2).toInt(), (py - pathTile.height / 2).toInt())
@@ -125,7 +124,7 @@ fun DrawScope.drawPaths(
     }
 }
 
-// Generatore procedurale (SENZA Cartelli)
+// Generatore procedurale
 fun generateForestScenery(worldSize: Size, count: Int): List<SceneryObject> {
     val list = mutableListOf<SceneryObject>()
     val rnd = Random(9999)
@@ -138,7 +137,6 @@ fun generateForestScenery(worldSize: Size, count: Int): List<SceneryObject> {
         val distFromCenter = hypot((x - center.x).toDouble(), (y - center.y).toDouble())
         if (distFromCenter < 300.0) continue
 
-        // NIENTE CARTELLI QUI, SOLO NATURA
         val type = when (rnd.nextInt(100)) {
             in 0..35 -> SceneryType.TREE_PINE
             in 36..60 -> SceneryType.TREE_OAK
