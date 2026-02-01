@@ -2,6 +2,7 @@ package it.sapienza.forestanimalsgame
 
 import android.os.Bundle
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -50,6 +51,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // --- BLOCCA LA ROTAZIONE DELLO SCHERMO ---
+        // Questo impedisce all'app di ruotare e riavviarsi
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        // -----------------------------------------
 
         credentialManager = CredentialManager.create(this)
 

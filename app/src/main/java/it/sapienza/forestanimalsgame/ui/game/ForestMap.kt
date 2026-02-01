@@ -26,21 +26,26 @@ data class SceneryObject(
 )
 
 enum class SceneryType {
-    TREE_PINE, TREE_OAK, ROCK, MUSHROOM_RED, MUSHROOM_GROUP, BUSH, LOG, SIGN
+    TREE_PINE, TREE_OAK, ROCK, MUSHROOM_RED, MUSHROOM_GROUP, BUSH, LOG, SIGN,
+    CAGE, NPC_PRISONER // Nuovi tipi
 }
 
 @Composable
 fun rememberForestResources(): Map<SceneryType, ImageBitmap> {
     val pine = ImageBitmap.imageResource(R.drawable.tree)
     val oak = ImageBitmap.imageResource(R.drawable.tree)
-    val bush = ImageBitmap.imageResource(R.drawable.tree) // Assicurati di avere 2chiome.png o usa tree
+    val bush = ImageBitmap.imageResource(R.drawable.tree)
     val rock = ImageBitmap.imageResource(R.drawable.roccia)
     val mushRed = ImageBitmap.imageResource(R.drawable.funghetto1)
     val mushGroup = ImageBitmap.imageResource(R.drawable.funghi3)
     val log = ImageBitmap.imageResource(R.drawable.tronco)
     val sign = ImageBitmap.imageResource(R.drawable.cartello)
 
-    return remember(pine, oak, bush, rock, mushRed, mushGroup, log, sign) {
+    // PLACEHOLDER: Sostituisci con R.drawable.gabbia e R.drawable.av_orso (o altro animale)
+    val cage = ImageBitmap.imageResource(R.drawable.cage) // Uso tronco come placeholder gabbia
+    val npc = ImageBitmap.imageResource(R.drawable.av_bear) // Uso orso come prigioniero
+
+    return remember(pine, oak, bush, rock, mushRed, mushGroup, log, sign, cage, npc) {
         mapOf(
             SceneryType.TREE_PINE to pine,
             SceneryType.TREE_OAK to oak,
@@ -49,7 +54,9 @@ fun rememberForestResources(): Map<SceneryType, ImageBitmap> {
             SceneryType.MUSHROOM_RED to mushRed,
             SceneryType.MUSHROOM_GROUP to mushGroup,
             SceneryType.LOG to log,
-            SceneryType.SIGN to sign
+            SceneryType.SIGN to sign,
+            SceneryType.CAGE to cage,
+            SceneryType.NPC_PRISONER to npc
         )
     }
 }
@@ -72,16 +79,17 @@ fun DrawScope.drawTerrain(
 ) {
     val tileSize = 128f
 
-    // Calcoliamo indici sicuri con un buffer di 2 tile extra per lato
-    // floor/ceil garantiscono che copriamo anche le frazioni di pixel
-    val startCol = (floor(visibleRect.left / tileSize).toInt() - 2).coerceAtLeast(0)
-    val endCol = (ceil(visibleRect.right / tileSize).toInt() + 2).coerceAtMost((worldSize.width / tileSize).toInt())
+    val totalCols = ceil(worldSize.width / tileSize).toInt()
+    val totalRows = ceil(worldSize.height / tileSize).toInt()
 
-    val startRow = (floor(visibleRect.top / tileSize).toInt() - 2).coerceAtLeast(0)
-    val endRow = (ceil(visibleRect.bottom / tileSize).toInt() + 2).coerceAtMost((worldSize.height / tileSize).toInt())
+    val startCol = (floor(visibleRect.left / tileSize).toInt() - 1).coerceAtLeast(0)
+    val endCol = (ceil(visibleRect.right / tileSize).toInt() + 1).coerceAtMost(totalCols)
 
-    for (row in startRow..endRow) {
-        for (col in startCol..endCol) {
+    val startRow = (floor(visibleRect.top / tileSize).toInt() - 1).coerceAtLeast(0)
+    val endRow = (ceil(visibleRect.bottom / tileSize).toInt() + 1).coerceAtMost(totalRows)
+
+    for (row in startRow until endRow) {
+        for (col in startCol until endCol) {
             drawImage(
                 image = terrainTile,
                 dstOffset = IntOffset((col * tileSize).toInt(), (row * tileSize).toInt()),
@@ -130,12 +138,23 @@ fun generateForestScenery(worldSize: Size, count: Int): List<SceneryObject> {
     val rnd = Random(9999)
     val center = androidx.compose.ui.geometry.Offset(worldSize.width / 2, worldSize.height / 2)
 
+    // 1. Aggiungiamo la GABBIA e l'NPC vicino allo spawn (Fissi)
+    // L'NPC è leggermente sopra la gabbia così sembra dentro se disegnato prima
+    val cagePos = Offset(center.x + 300f, center.y - 100f)
+
+    // NPC Prigioniero (ID negativi per riconoscerli)
+    list.add(SceneryObject(-2, SceneryType.NPC_PRISONER, cagePos.x, cagePos.y - 20f, 5.2f))
+    // Gabbia (Disegnata sopra o sotto in base allo Z-Sort)
+    list.add(SceneryObject(-1, SceneryType.CAGE, cagePos.x, cagePos.y, 0.16f))
+
+    // 2. Generazione casuale del resto
     for (i in 0 until count) {
         val x = rnd.nextFloat() * worldSize.width
         val y = rnd.nextFloat() * worldSize.height
 
+        // Evita l'area di spawn e della gabbia
         val distFromCenter = hypot((x - center.x).toDouble(), (y - center.y).toDouble())
-        if (distFromCenter < 300.0) continue
+        if (distFromCenter < 400.0) continue
 
         val type = when (rnd.nextInt(100)) {
             in 0..35 -> SceneryType.TREE_PINE

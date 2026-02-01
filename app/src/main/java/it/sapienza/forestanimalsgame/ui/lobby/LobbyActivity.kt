@@ -29,6 +29,9 @@ class LobbyActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        // ----------------------------
+
         setContent {
             ForestAnimalsGameTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {

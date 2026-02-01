@@ -62,6 +62,9 @@ class RegisterActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        // ----------------------------
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         permissionsLauncher.launch(

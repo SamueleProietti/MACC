@@ -4,11 +4,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.*
@@ -17,7 +17,6 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -29,7 +28,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
@@ -48,10 +46,10 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 // --- CONFIGURAZIONE ---
-const val DEBUG_MODE = false // Metti true se vuoi vedere i cerchi di debug
+const val DEBUG_MODE = false
 const val AVATAR_SIZE_PX = 150f
-// Calibrazione: Quanto spostare l'immagine affinché i "piedi" siano sul punto cliccato
 const val DRAW_OFFSET_Y = 15f
+const val FIXED_ZOOM = 1f
 
 private val OffsetSaver: Saver<Offset, ArrayList<Float>> = Saver(
     save = { arrayListOf(it.x, it.y) },
@@ -63,7 +61,7 @@ private val StringSetSaver: Saver<Set<String>, ArrayList<String>> = Saver(
     restore = { it.toSet() }
 )
 
-private enum class QuestType { LIGHT, GYRO, CAMERA }
+enum class QuestType { LIGHT, GYRO, CAMERA }
 
 private data class QuestSpot(
     val id: String,
@@ -111,24 +109,38 @@ fun GameScreen(
     val staticScenery = remember(worldSize) { generateForestScenery(worldSize, 250) }
 
     // 3. STATO
-    // Zoom di default a 1.5f per partire vicini
-    val zoomState = rememberSaveable { mutableStateOf(1f) }
+    val zoomState = rememberSaveable { mutableStateOf(FIXED_ZOOM) }
     val panState = rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(Offset.Zero) }
-
     var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
 
     var avatar by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(spawn) }
     var target by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(spawn) }
 
+    // STATO MISSIONI & CHIAVI
     var selectedQuest by remember { mutableStateOf<QuestSpot?>(null) }
     var activeQuestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeMinigame by remember { mutableStateOf<QuestType?>(null) }
+
     var completed by rememberSaveable(stateSaver = StringSetSaver) { mutableStateOf(setOf<String>()) }
+    var collectedKeys by rememberSaveable { mutableIntStateOf(0) }
+
+    val isGameWon = collectedKeys >= 3
+
+    var showIntroDialog by rememberSaveable { mutableStateOf(true) }
+    var showWinDialog by rememberSaveable { mutableStateOf(false) }
+    var showCageDialog by remember { mutableStateOf(false) }
+    var showBearDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(collectedKeys) {
+        if (collectedKeys > 0) showIntroDialog = false
+        if (collectedKeys == 3) showWinDialog = true
+    }
 
     val questSpots = remember {
         listOf(
-            QuestSpot("q_light", "La Radura Oscura", "Trova la radura", QuestType.LIGHT, Offset(600f, 600f)),
-            QuestSpot("q_gyro", "L'Albero Caduto", "Mantieni l'equilibrio", QuestType.GYRO, Offset(1500f, 800f)),
-            QuestSpot("q_camera", "Il Grande Fungo", "Scatta una foto", QuestType.CAMERA, Offset(1000f, 2000f))
+            QuestSpot("q_light", "La Bussola Magica", "Trova il Nord per diradare la nebbia", QuestType.LIGHT, Offset(600f, 600f)),
+            QuestSpot("q_gyro", "Il Sentiero Tortuoso", "Guida l'animale inclinando il telefono", QuestType.GYRO, Offset(1500f, 800f)),
+            QuestSpot("q_accel", "L'Albero Antico", "Scuoti l'albero per far cadere la chiave", QuestType.CAMERA, Offset(1000f, 2000f))
         )
     }
 
@@ -147,35 +159,31 @@ fun GameScreen(
             target = clampCenter(Offset(gs.targetX.toFloat(), gs.targetY.toFloat()), worldSize.width, worldSize.height)
             activeQuestId = gs.activeQuestId
             completed = gs.completed.toSet()
-            zoomState.value = gs.zoom.toFloat()
+            zoomState.value = FIXED_ZOOM
             panState.value = Offset(gs.panX.toFloat(), gs.panY.toFloat())
         }
         hydrated = true
     }
 
-    // GESTIONE LIMITI ZOOM & PAN
-    // Appena cambia la dimensione dello schermo o lo zoom, ricalcoliamo il pan sicuro
-    LaunchedEffect(canvasSize, zoomState.value) {
+    LaunchedEffect(canvasSize) {
         if (canvasSize.width > 0 && canvasSize.height > 0) {
-            val safePan = clampPanStrict(panState.value, canvasSize.width.toFloat(), canvasSize.height.toFloat(), worldSize.width, worldSize.height, zoomState.value)
+            val safePan = clampPanStrict(panState.value, canvasSize.width.toFloat(), canvasSize.height.toFloat(), worldSize.width, worldSize.height, FIXED_ZOOM)
             if (safePan != panState.value) panState.value = safePan
         }
     }
 
-    // Inizializza camera al centro avatar al primo avvio
     var cameraInitialized by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(canvasSize, sessionId) {
         if (!cameraInitialized && canvasSize.width > 0) {
             val desired = Offset(
-                x = canvasSize.width / 2f - avatar.x * zoomState.value,
-                y = canvasSize.height / 2f - avatar.y * zoomState.value
+                x = canvasSize.width / 2f - avatar.x * FIXED_ZOOM,
+                y = canvasSize.height / 2f - avatar.y * FIXED_ZOOM
             )
-            panState.value = clampPanStrict(desired, canvasSize.width.toFloat(), canvasSize.height.toFloat(), worldSize.width, worldSize.height, zoomState.value)
+            panState.value = clampPanStrict(desired, canvasSize.width.toFloat(), canvasSize.height.toFloat(), worldSize.width, worldSize.height, FIXED_ZOOM)
             cameraInitialized = true
         }
     }
 
-    // MOVEMENT LOOP
     LaunchedEffect(target) {
         while (true) {
             val dx = target.x - avatar.x
@@ -192,16 +200,6 @@ fun GameScreen(
 
             avatar = clampCenter(Offset(avatar.x + stepX, avatar.y + stepY), worldSize.width, worldSize.height)
             delay(16)
-        }
-    }
-
-    LaunchedEffect(avatar, activeQuestId) {
-        val qid = activeQuestId ?: return@LaunchedEffect
-        val spot = questSpots.firstOrNull { it.id == qid } ?: return@LaunchedEffect
-        val d = hypot((avatar.x - spot.position.x).toDouble(), (avatar.y - spot.position.y).toDouble()).toFloat()
-        if (d <= spot.radiusPx) {
-            completed = completed + qid
-            activeQuestId = null
         }
     }
 
@@ -225,55 +223,60 @@ fun GameScreen(
     }
 
     // --- UI LAYOUT ---
-    // Usiamo Box come contenitore principale per sovrapporre Mappa e UI
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // 1. MAPPA (Sotto tutto)
+        // 1. MAPPA
         Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF2E7D32)) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
-                        detectTransformGestures { centroid, panChange, zoomChange, _ ->
-                            val oldZoom = zoomState.value
+                        detectTransformGestures { centroid, panChange, _, _ ->
                             val currentPan = panState.value
-
                             val cw = canvasSize.width.toFloat()
                             val ch = canvasSize.height.toFloat()
-
-                            // CALCOLO MIN ZOOM DINAMICO
-                            // Lo zoom minimo deve essere tale che worldSize * zoom >= screenSize
-                            // Quindi zoom >= screenSize / worldSize
-                            val minZoomX = cw / worldSize.width
-                            val minZoomY = ch / worldSize.height
-                            val calculatedMinZoom = max(minZoomX, minZoomY)
-                            // Max zoom fisso a 3.5x
-                            val calculatedMaxZoom = 3.5f
-
-                            // Se lo schermo è ridimensionato, assicurati che il currentZoom non sia illegale
-                            val safeOldZoom = oldZoom.coerceIn(calculatedMinZoom, calculatedMaxZoom)
-
-                            val newZoom = (safeOldZoom * zoomChange).coerceIn(calculatedMinZoom, calculatedMaxZoom)
-                            val zoomFactor = newZoom / safeOldZoom
-                            val tentativePan = currentPan + panChange + (centroid - currentPan) * (1 - zoomFactor)
-
-                            zoomState.value = newZoom
-                            panState.value = clampPanStrict(tentativePan, cw, ch, worldSize.width, worldSize.height, newZoom)
+                            val tentativePan = currentPan + panChange
+                            panState.value = clampPanStrict(tentativePan, cw, ch, worldSize.width, worldSize.height, FIXED_ZOOM)
                         }
                     }
-                    .pointerInput(Unit) {
+                    // FIX BUG POPUP: Cambiato key da Unit a isGameWon
+                    // In questo modo, quando vinci, il rilevatore di tocchi si aggiorna
+                    // e capisce che ora devi cliccare l'ORSO e non più la GABBIA.
+                    .pointerInput(isGameWon) {
                         detectTapGestures { tap ->
-                            val currentZoom = zoomState.value
                             val currentPan = panState.value
-
-                            val worldTap = (tap - currentPan) / currentZoom
+                            val worldTap = (tap - currentPan) / FIXED_ZOOM
 
                             val hitQuest = questSpots.firstOrNull { spot ->
                                 hypot((worldTap.x - spot.position.x).toDouble(), (worldTap.y - spot.position.y).toDouble()) <= spot.radiusPx
                             }
 
+                            // LOGICA DI CLIC GABBIA/ORSO
+                            var hitCage: SceneryObject? = null
+                            var hitBear: SceneryObject? = null
+
+                            if (!isGameWon) {
+                                // Se non abbiamo vinto, cerchiamo solo la GABBIA
+                                hitCage = staticScenery.firstOrNull {
+                                    it.type == SceneryType.CAGE &&
+                                            hypot((worldTap.x - it.x).toDouble(), (worldTap.y - it.y).toDouble()) <= 150f
+                                }
+                            } else {
+                                // Se ABBIAMO vinto, cerchiamo solo l'ORSO
+                                hitBear = staticScenery.firstOrNull {
+                                    it.type == SceneryType.NPC_PRISONER &&
+                                            hypot((worldTap.x - it.x).toDouble(), (worldTap.y - it.y).toDouble()) <= 150f
+                                }
+                            }
+
                             if (hitQuest != null) {
                                 selectedQuest = hitQuest
+                            } else if (hitCage != null) {
+                                // Cliccato gabbia quando non vinto -> Dialogo "Ti servono chiavi"
+                                showCageDialog = true
+                            } else if (hitBear != null) {
+                                // Cliccato orso quando vinto -> Dialogo "Grazie!"
+                                showBearDialog = true
                             } else {
                                 target = clampCenter(worldTap, worldSize.width, worldSize.height)
                             }
@@ -284,17 +287,16 @@ fun GameScreen(
                     canvasSize = IntSize(size.width.toInt(), size.height.toInt())
                 }
 
-                val currentZoom = zoomState.value
                 val currentPan = panState.value
 
                 withTransform({
                     translate(currentPan.x, currentPan.y)
-                    scale(currentZoom, currentZoom)
+                    scale(FIXED_ZOOM, FIXED_ZOOM)
                 }) {
-                    val viewLeft = -currentPan.x / currentZoom
-                    val viewTop = -currentPan.y / currentZoom
-                    val viewRight = viewLeft + size.width / currentZoom
-                    val viewBottom = viewTop + size.height / currentZoom
+                    val viewLeft = -currentPan.x / FIXED_ZOOM
+                    val viewTop = -currentPan.y / FIXED_ZOOM
+                    val viewRight = viewLeft + size.width / FIXED_ZOOM
+                    val viewBottom = viewTop + size.height / FIXED_ZOOM
                     val visibleRect = androidx.compose.ui.geometry.Rect(viewLeft, viewTop, viewRight, viewBottom)
 
                     drawTerrain(worldSize, terrainTile, visibleRect)
@@ -303,9 +305,13 @@ fun GameScreen(
 
                     val drawQueue = ArrayList<DrawableItem>()
 
-                    // Scenery
                     staticScenery.forEach { obj ->
-                        // Culling con margine più ampio
+                        if (isGameWon) {
+                            if (obj.type == SceneryType.CAGE) return@forEach
+                        } else {
+                            if (obj.type == SceneryType.NPC_PRISONER) return@forEach
+                        }
+
                         if (obj.x in (viewLeft - 400)..(viewRight + 400) &&
                             obj.y in (viewTop - 400)..(viewBottom + 400)) {
                             val bmp = forestResources[obj.type]
@@ -322,28 +328,25 @@ fun GameScreen(
                         }
                     }
 
-                    // Quest
                     questSpots.forEach { quest ->
                         drawQueue.add(object : DrawableItem {
                             override val y = quest.position.y
                             override fun draw(scope: DrawScope) {
                                 val isCompleted = quest.id in completed
-                                val alpha = if (isCompleted) 0.5f else 1f
-                                val scale = 3.5f
-                                val w = signBitmap.width.toFloat() * scale
-                                val h = signBitmap.height.toFloat() * scale
-                                scope.drawImage(image = signBitmap, dstOffset = IntOffset((quest.position.x - w/2).toInt(), (quest.position.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()), alpha = alpha)
+                                if (isCompleted) return
+
+                                val w = signBitmap.width.toFloat() * 3.5f
+                                val h = signBitmap.height.toFloat() * 3.5f
+                                scope.drawImage(image = signBitmap, dstOffset = IntOffset((quest.position.x - w/2).toInt(), (quest.position.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()))
                             }
                         })
                     }
 
-                    // Avatar
                     drawQueue.add(object : DrawableItem {
                         override val y = avatar.y + 20f
                         override fun draw(scope: DrawScope) {
                             scope.drawImage(
                                 image = avatarBitmap,
-                                // Offset Y per centrare i piedi sul punto
                                 dstOffset = IntOffset(
                                     (avatar.x - AVATAR_SIZE_PX/2).toInt(),
                                     (avatar.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()
@@ -353,7 +356,6 @@ fun GameScreen(
                         }
                     })
 
-                    // Players
                     session?.members?.forEach { m ->
                         if (m.uid != currentUid) {
                             val pos = uidToSpawn(m.uid, worldCenter)
@@ -378,111 +380,166 @@ fun GameScreen(
             }
         }
 
-        // 2. LAYER METEO (Sopra mappa, sotto UI)
-        // Ignorano il padding di sistema per coprire tutto
         when (testWeather) {
             "rain" -> RainOverlay()
             "snow" -> SnowOverlay()
         }
         DayNightOverlay(isNight = testNight)
 
-        // 3. UI OVERLAY (Pulsanti e HUD)
-        // ✅ RESPONSIVE FIX: systemBarsPadding() sposta la UI sotto la status bar/notch
+        // 3. UI OVERLAY
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .systemBarsPadding() // Questo evita che la UI finisca sotto la fotocamera o nav bar
+                .systemBarsPadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // TOP BAR
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                // Sinistra: Info e Orario
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // HUD Orario
                     TimeHUD(testNight)
-
-                    // Info Testo (opzionale)
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha=0.8f))) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            Text("Foresta", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text("Status: ${session?.status ?: "..."}", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
                 }
-
-                // Destra: Meteo e Controlli
+                KeysHUD(collectedKeys)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
                     WeatherHUD(testWeather)
-
-                    // Bottoni Test (Raggruppati)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(
-                            onClick = {
-                                testWeather = when(testWeather) { "clear" -> "rain"; "rain" -> "snow"; else -> "clear" }
-                            },
-                            contentPadding = PaddingValues(0.dp),
-                            modifier = Modifier.width(60.dp)
-                        ) { Text("W") } // W = Weather
-
-                        Button(
-                            onClick = { testNight = !testNight },
-                            contentPadding = PaddingValues(0.dp),
-                            modifier = Modifier.width(60.dp)
-                        ) { Text("T") } // T = Time
-
-                        Button(
-                            onClick = onLeave,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                            contentPadding = PaddingValues(0.dp),
-                            modifier = Modifier.width(60.dp)
-                        ) { Text("X") }
+                        Button(onClick = { testWeather = when(testWeather) { "clear" -> "rain"; "rain" -> "snow"; else -> "clear" } }, contentPadding = PaddingValues(0.dp), modifier = Modifier.width(60.dp)) { Text("W") }
+                        Button(onClick = { testNight = !testNight }, contentPadding = PaddingValues(0.dp), modifier = Modifier.width(60.dp)) { Text("T") }
+                        Button(onClick = onLeave, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), contentPadding = PaddingValues(0.dp), modifier = Modifier.width(60.dp)) { Text("X") }
                     }
                 }
             }
 
-            // BOTTOM BAR
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        avatar = spawn; target = spawn; zoomState.value = 1.3f
-                    },
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha=0.9f))
-                ) { Text("Reset") }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                OutlinedButton(onClick = { avatar = spawn; target = spawn }, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha=0.9f))) { Text("Reset") }
 
-                Button(
-                    onClick = {
-                        val next = questSpots.firstOrNull { it.id !in completed }
-                        if (next != null) { activeQuestId = next.id; target = next.position }
-                    },
-                    enabled = activeQuestId == null && completed.size < questSpots.size
-                ) { Text("Nuova Missione") }
+                Button(onClick = {
+                    if(collectedKeys < 3) collectedKeys += 1
+                }, enabled = collectedKeys < 3) { Text("+ Chiave") }
             }
+        }
+
+        // --- 4. OVERLAY MINIGIOCHI ---
+        when (activeMinigame) {
+            QuestType.CAMERA -> {
+                MinigameShake(
+                    onDismiss = { activeMinigame = null },
+                    onWin = {
+                        activeMinigame = null
+                        collectedKeys = (collectedKeys + 1).coerceAtMost(3)
+                        if (activeQuestId != null) {
+                            completed = completed + activeQuestId!!
+                            activeQuestId = null
+                        }
+                    }
+                )
+            }
+
+            QuestType.GYRO -> {
+                MinigameGyro(
+                    onDismiss = { activeMinigame = null },
+                    onWin = {
+                        activeMinigame = null
+                        collectedKeys = (collectedKeys + 1).coerceAtMost(3)
+                        if (activeQuestId != null) {
+                            completed = completed + activeQuestId!!
+                            activeQuestId = null
+                        }
+                    },
+                    avatarResId = resId
+                )
+            }
+
+            QuestType.LIGHT -> {
+                MinigameCompass(
+                    onDismiss = { activeMinigame = null },
+                    onWin = {
+                        activeMinigame = null
+                        collectedKeys = (collectedKeys + 1).coerceAtMost(3)
+                        if (activeQuestId != null) {
+                            completed = completed + activeQuestId!!
+                            activeQuestId = null
+                        }
+                    }
+                )
+            }
+            null -> { /* Nessun minigioco attivo */ }
         }
     }
 
-    // Dialogs
+    // --- DIALOGHI ---
+    if (showIntroDialog && collectedKeys == 0) {
+        AlertDialog(
+            onDismissRequest = { showIntroDialog = false },
+            title = { Text("Benvenuto nella Foresta!") },
+            text = { Text("Il tuo amico Orso è stato catturato!\n\nDevi completare le 3 missioni dei Saggi per ottenere le Chiavi Magiche e liberarlo.") },
+            confirmButton = { Button(onClick = { showIntroDialog = false }) { Text("Inizia l'Avventura") } }
+        )
+    }
+
     val sq = selectedQuest
     if (sq != null) {
+        val done = sq.id in completed
+        if (!done) {
+            AlertDialog(
+                onDismissRequest = { selectedQuest = null },
+                title = { Text(sq.title) },
+                text = { Text(sq.description) },
+                confirmButton = {
+                    Button(onClick = {
+                        activeQuestId = sq.id
+                        activeMinigame = sq.type
+                        selectedQuest = null
+                    }) { Text("Gioca") }
+                },
+                dismissButton = { TextButton(onClick = { selectedQuest = null }) { Text("Annulla") } }
+            )
+        }
+    }
+
+    if (showWinDialog) {
         AlertDialog(
-            onDismissRequest = { selectedQuest = null },
-            title = { Text(sq.title) },
-            text = { Text(sq.description) },
-            confirmButton = { Button(onClick = { activeQuestId = sq.id; target = sq.position; selectedQuest = null }) { Text("Attiva") } },
-            dismissButton = { TextButton(onClick = { selectedQuest = null }) { Text("Chiudi") } }
+            onDismissRequest = { /* Bloccato */ },
+            title = { Text("🎉 L'ORSO È LIBERO! 🎉") },
+            text = { Text("Hai raccolto tutte le 3 chiavi!\nLa gabbia si è aperta e il tuo amico è salvo grazie a te.") },
+            confirmButton = { Button(onClick = onLeave) { Text("Torna al Menu") } },
+            dismissButton = { TextButton(onClick = { showWinDialog = false }) { Text("Resta qui") } }
+        )
+    }
+
+    // GABBIA CHIUSA
+    if (showCageDialog) {
+        AlertDialog(
+            onDismissRequest = { showCageDialog = false },
+            title = { Text("La Gabbia è chiusa") },
+            text = { Text("Ti servono 3 Chiavi per aprirla.\nNe hai raccolte ${collectedKeys}/3.") },
+            confirmButton = { TextButton(onClick = { showCageDialog = false }) { Text("Ok") } }
+        )
+    }
+
+    // DIALOGO ORSO LIBERO
+    if (showBearDialog) {
+        AlertDialog(
+            onDismissRequest = { showBearDialog = false },
+            title = { Text("🐻 Grazie Amico!") },
+            text = { Text("Mi hai salvato! Non dimenticherò mai il tuo aiuto.\nLa foresta è un posto migliore grazie a te.") },
+            confirmButton = { TextButton(onClick = { showBearDialog = false }) { Text("Prego!") } }
         )
     }
 }
 
-// ... Huds & Helpers ...
+// ... Huds & Helpers uguali a prima ...
+@Composable
+fun KeysHUD(collected: Int) {
+    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f))) {
+        Row(modifier = Modifier.padding(12.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) { index ->
+                val active = index < collected
+                Icon(imageVector = Icons.Filled.VpnKey, contentDescription = null, tint = if (active) Color(0xFFFFD54F) else Color.Gray.copy(alpha=0.5f), modifier = Modifier.size(28.dp))
+            }
+        }
+    }
+}
+
 @Composable
 fun TimeHUD(isNight: Boolean) {
     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f))) {
@@ -500,7 +557,8 @@ fun WeatherHUD(weather: String) {
                 "rain" -> Icons.Filled.WaterDrop to Color(0xFF4FC3F7)
                 "snow" -> Icons.Filled.AcUnit to Color.White
                 "clear" -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
-                else -> Icons.Filled.Cloud to Color.LightGray
+                else -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
+                //else -> Icons.Filled.Cloud to Color.LightGray
             }
             Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
         }
@@ -530,19 +588,9 @@ private fun clampCenter(p: Offset, width: Float, height: Float): Offset {
 private fun clampPanStrict(pan: Offset, canvasW: Float, canvasH: Float, worldW: Float, worldH: Float, zoom: Float): Offset {
     val scaledWorldW = worldW * zoom
     val scaledWorldH = worldH * zoom
-
-    // LOGICA DI CLAMPING RIGIDO:
-    // Se la mappa è più grande dello schermo (normale), il pan deve stare tra [canvasW - scaledW, 0]
-    // Se la mappa è più piccola (solo se minZoom è calcolato male, ma qui lo preveniamo), centra la mappa.
-
     val minX = if (scaledWorldW > canvasW) canvasW - scaledWorldW else (canvasW - scaledWorldW) / 2
     val maxX = if (scaledWorldW > canvasW) 0f else (canvasW - scaledWorldW) / 2
-
     val minY = if (scaledWorldH > canvasH) canvasH - scaledWorldH else (canvasH - scaledWorldH) / 2
     val maxY = if (scaledWorldH > canvasH) 0f else (canvasH - scaledWorldH) / 2
-
-    return Offset(
-        pan.x.coerceIn(minX, maxX),
-        pan.y.coerceIn(minY, maxY)
-    )
+    return Offset(pan.x.coerceIn(minX, maxX), pan.y.coerceIn(minY, maxY))
 }
