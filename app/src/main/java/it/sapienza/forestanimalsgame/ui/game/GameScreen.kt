@@ -1,10 +1,12 @@
 package it.sapienza.forestanimalsgame.ui.game
 
+import android.app.Activity
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
@@ -17,6 +19,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -29,12 +32,18 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.R
 import it.sapienza.forestanimalsgame.data.model.GameState
@@ -42,6 +51,7 @@ import it.sapienza.forestanimalsgame.data.model.Session
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.material.icons.filled.AcUnit
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -90,6 +100,7 @@ fun GameScreen(
     onLeave: () -> Unit
 ) {
     val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "unknown" }
+    val context = LocalContext.current // Serve per il tasto "Menu" (Back)
 
     // 1. SETUP MONDO
     val worldSize = remember { Size(width = 4000f, height = 4000f) }
@@ -97,7 +108,6 @@ fun GameScreen(
     val spawn = remember(currentUid, worldCenter) { uidToSpawn(currentUid, worldCenter) }
 
     // 2. RISORSE
-    val context = LocalContext.current
     val resId = remember(avatarId) { avatarResId(avatarId) }
     val avatarBitmap = remember(resId) { ImageBitmap.imageResource(context.resources, resId) }
 
@@ -144,8 +154,9 @@ fun GameScreen(
         )
     }
 
-    var testWeather by remember { mutableStateOf(currentWeather) }
-    var testNight by remember { mutableStateOf(isNightTime) }
+    // Meteo e Notte fissi per ora (Rimossi i tasti di test)
+    val testWeather by remember { mutableStateOf(currentWeather) }
+    val testNight by remember { mutableStateOf(isNightTime) }
 
     val vividFilter = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.4f) }) }
 
@@ -239,10 +250,7 @@ fun GameScreen(
                             panState.value = clampPanStrict(tentativePan, cw, ch, worldSize.width, worldSize.height, FIXED_ZOOM)
                         }
                     }
-                    // FIX BUG POPUP: Cambiato key da Unit a isGameWon
-                    // In questo modo, quando vinci, il rilevatore di tocchi si aggiorna
-                    // e capisce che ora devi cliccare l'ORSO e non più la GABBIA.
-                    .pointerInput(isGameWon) {
+                    .pointerInput(isGameWon) { // Key su isGameWon per aggiornare i click
                         detectTapGestures { tap ->
                             val currentPan = panState.value
                             val worldTap = (tap - currentPan) / FIXED_ZOOM
@@ -256,13 +264,11 @@ fun GameScreen(
                             var hitBear: SceneryObject? = null
 
                             if (!isGameWon) {
-                                // Se non abbiamo vinto, cerchiamo solo la GABBIA
                                 hitCage = staticScenery.firstOrNull {
                                     it.type == SceneryType.CAGE &&
                                             hypot((worldTap.x - it.x).toDouble(), (worldTap.y - it.y).toDouble()) <= 150f
                                 }
                             } else {
-                                // Se ABBIAMO vinto, cerchiamo solo l'ORSO
                                 hitBear = staticScenery.firstOrNull {
                                     it.type == SceneryType.NPC_PRISONER &&
                                             hypot((worldTap.x - it.x).toDouble(), (worldTap.y - it.y).toDouble()) <= 150f
@@ -272,10 +278,8 @@ fun GameScreen(
                             if (hitQuest != null) {
                                 selectedQuest = hitQuest
                             } else if (hitCage != null) {
-                                // Cliccato gabbia quando non vinto -> Dialogo "Ti servono chiavi"
                                 showCageDialog = true
                             } else if (hitBear != null) {
-                                // Cliccato orso quando vinto -> Dialogo "Grazie!"
                                 showBearDialog = true
                             } else {
                                 target = clampCenter(worldTap, worldSize.width, worldSize.height)
@@ -394,27 +398,52 @@ fun GameScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            // TOP BAR
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                // SINISTRA: HUD Tempo
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TimeHUD(testNight)
                 }
+
+                // CENTRO: Chiavi
                 KeysHUD(collectedKeys)
+
+                // DESTRA: Meteo + Test Chiave
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
                     WeatherHUD(testWeather)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(onClick = { testWeather = when(testWeather) { "clear" -> "rain"; "rain" -> "snow"; else -> "clear" } }, contentPadding = PaddingValues(0.dp), modifier = Modifier.width(60.dp)) { Text("W") }
-                        Button(onClick = { testNight = !testNight }, contentPadding = PaddingValues(0.dp), modifier = Modifier.width(60.dp)) { Text("T") }
-                        Button(onClick = onLeave, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), contentPadding = PaddingValues(0.dp), modifier = Modifier.width(60.dp)) { Text("X") }
-                    }
+                    // Bottone Test Chiave (Spostato qui)
+                    Button(
+                        onClick = { if(collectedKeys < 3) collectedKeys += 1 },
+                        enabled = collectedKeys < 3,
+                        modifier = Modifier.height(35.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) { Text("+ Key", fontSize = 12.sp) }
                 }
             }
 
+            // BOTTOM BAR (3 Pulsanti: Reset, Menu, Esci)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                OutlinedButton(onClick = { avatar = spawn; target = spawn }, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha=0.9f))) { Text("Reset") }
 
-                Button(onClick = {
-                    if(collectedKeys < 3) collectedKeys += 1
-                }, enabled = collectedKeys < 3) { Text("+ Chiave") }
+                // 1. RESET (Posizione)
+                ForestButton(
+                    text = "Reset",
+                    onClick = { avatar = spawn; target = spawn },
+                    modifier = Modifier.width(100.dp)
+                )
+
+                // 2. MENU (Torna indietro senza chiudere sessione)
+                ForestButton(
+                    text = "Menu",
+                    onClick = { (context as? Activity)?.onBackPressed() },
+                    modifier = Modifier.width(100.dp)
+                )
+
+                // 3. ESCI (Chiude sessione)
+                ForestButton(
+                    text = "Esci",
+                    onClick = onLeave,
+                    modifier = Modifier.width(100.dp)
+                )
             }
         }
 
@@ -433,7 +462,6 @@ fun GameScreen(
                     }
                 )
             }
-
             QuestType.GYRO -> {
                 MinigameGyro(
                     onDismiss = { activeMinigame = null },
@@ -448,7 +476,6 @@ fun GameScreen(
                     avatarResId = resId
                 )
             }
-
             QuestType.LIGHT -> {
                 MinigameCompass(
                     onDismiss = { activeMinigame = null },
@@ -466,13 +493,14 @@ fun GameScreen(
         }
     }
 
-    // --- DIALOGHI ---
+    // --- DIALOGHI AGGIORNATI CON STILE ---
     if (showIntroDialog && collectedKeys == 0) {
-        AlertDialog(
-            onDismissRequest = { showIntroDialog = false },
-            title = { Text("Benvenuto nella Foresta!") },
-            text = { Text("Il tuo amico Orso è stato catturato!\n\nDevi completare le 3 missioni dei Saggi per ottenere le Chiavi Magiche e liberarlo.") },
-            confirmButton = { Button(onClick = { showIntroDialog = false }) { Text("Inizia l'Avventura") } }
+        ForestDialog(
+            title = "Benvenuto!",
+            text = "Il tuo amico Orso è stato catturato!\n\nCompleta le 3 missioni dei Saggi per ottenere le Chiavi Magiche e liberarlo.",
+            onDismiss = { showIntroDialog = false },
+            confirmText = "Inizia!",
+            confirmAction = { showIntroDialog = false }
         )
     }
 
@@ -480,54 +508,177 @@ fun GameScreen(
     if (sq != null) {
         val done = sq.id in completed
         if (!done) {
-            AlertDialog(
-                onDismissRequest = { selectedQuest = null },
-                title = { Text(sq.title) },
-                text = { Text(sq.description) },
-                confirmButton = {
-                    Button(onClick = {
-                        activeQuestId = sq.id
-                        activeMinigame = sq.type
-                        selectedQuest = null
-                    }) { Text("Gioca") }
+            ForestDialog(
+                title = sq.title,
+                text = sq.description,
+                onDismiss = { selectedQuest = null },
+                confirmText = "Gioca",
+                confirmAction = {
+                    activeQuestId = sq.id
+                    activeMinigame = sq.type
+                    selectedQuest = null
                 },
-                dismissButton = { TextButton(onClick = { selectedQuest = null }) { Text("Annulla") } }
+                dismissText = "Annulla",
+                dismissAction = { selectedQuest = null }
             )
         }
     }
 
     if (showWinDialog) {
-        AlertDialog(
-            onDismissRequest = { /* Bloccato */ },
-            title = { Text("🎉 L'ORSO È LIBERO! 🎉") },
-            text = { Text("Hai raccolto tutte le 3 chiavi!\nLa gabbia si è aperta e il tuo amico è salvo grazie a te.") },
-            confirmButton = { Button(onClick = onLeave) { Text("Torna al Menu") } },
-            dismissButton = { TextButton(onClick = { showWinDialog = false }) { Text("Resta qui") } }
+        ForestDialog(
+            title = "L'ORSO È LIBERO!",
+            text = "Hai raccolto tutte le 3 chiavi!\nLa gabbia si è aperta e il tuo amico è salvo grazie a te.",
+            onDismiss = { }, // Bloccato
+            confirmText = "Torna al Menu",
+            confirmAction = onLeave,
+            dismissText = "Resta qui",
+            dismissAction = { showWinDialog = false }
         )
     }
 
-    // GABBIA CHIUSA
     if (showCageDialog) {
-        AlertDialog(
-            onDismissRequest = { showCageDialog = false },
-            title = { Text("La Gabbia è chiusa") },
-            text = { Text("Ti servono 3 Chiavi per aprirla.\nNe hai raccolte ${collectedKeys}/3.") },
-            confirmButton = { TextButton(onClick = { showCageDialog = false }) { Text("Ok") } }
+        ForestDialog(
+            title = "Gabbia Chiusa",
+            text = "Ti servono 3 Chiavi per aprirla.\nNe hai raccolte ${collectedKeys}/3.",
+            onDismiss = { showCageDialog = false },
+            confirmText = "Ok",
+            confirmAction = { showCageDialog = false }
         )
     }
 
-    // DIALOGO ORSO LIBERO
     if (showBearDialog) {
-        AlertDialog(
-            onDismissRequest = { showBearDialog = false },
-            title = { Text("🐻 Grazie Amico!") },
-            text = { Text("Mi hai salvato! Non dimenticherò mai il tuo aiuto.\nLa foresta è un posto migliore grazie a te.") },
-            confirmButton = { TextButton(onClick = { showBearDialog = false }) { Text("Prego!") } }
+        ForestDialog(
+            title = "Grazie Amico!",
+            text = "Mi hai salvato! Non dimenticherò mai il tuo aiuto.\nLa foresta è un posto migliore grazie a te.",
+            onDismiss = { showBearDialog = false },
+            confirmText = "Prego!",
+            confirmAction = { showBearDialog = false }
         )
     }
 }
 
-// ... Huds & Helpers uguali a prima ...
+// --- NUOVI COMPONENTI GRAFICI ---
+
+@Composable
+fun ForestDialog(
+    title: String,
+    text: String,
+    onDismiss: () -> Unit,
+    confirmText: String,
+    confirmAction: () -> Unit,
+    dismissText: String? = null,
+    dismissAction: (() -> Unit)? = null
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Sfondo Cartello (sign_large)
+            Image(
+                painter = painterResource(id = R.drawable.sign_large),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .width(350.dp)
+                    .height(280.dp) // Altezza fissa per coerenza
+            )
+
+            // Contenuto Testo e Bottoni
+            // Contenuto Testo e Bottoni
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .width(300.dp)
+                    .padding(16.dp)
+            ) {
+                // --- TITOLO (Stile RPG: Oro con Ombra) ---
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 35.sp,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.6f), // Ombra scura
+                            offset = Offset(2f, 2f), // Spostata leggermente
+                            blurRadius = 2f // Sfocatura
+                        )
+                    ),
+                    fontWeight = FontWeight.ExtraBold, // Molto spesso
+                    color = Color(0xFFFFE082), // COLORE ORO CHIARO (Molto carino sul legno)
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // --- TESTO CORPO (Bianco Panna con leggera ombra) ---
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyLarge.copy( // Uso bodyLarge per grandezza
+                        fontSize = 20.sp,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.5f),
+                            offset = Offset(1f, 1f),
+                            blurRadius = 1f
+                        )
+                    ),
+                    color = Color(0xFFFFF8E1), // BIANCO PANNA (Meno stancante del bianco puro)
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Bottoni (Restano uguali)
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (dismissText != null && dismissAction != null) {
+                        ForestButton(text = dismissText, onClick = dismissAction, modifier = Modifier.width(110.dp), fontSize = 14.sp)
+                    }
+
+                    ForestButton(text = confirmText, onClick = confirmAction, modifier = Modifier.width(110.dp), fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ForestButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 16.sp
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .height(50.dp)
+            .clickable { onClick() }
+    ) {
+        // Sfondo Asse di Legno (plank_wide_left)
+        Image(
+            painter = painterResource(id = R.drawable.plank_wide_left),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize()
+        )
+        // Testo Bottone
+        Text(
+            text = text,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = fontSize,
+            style = MaterialTheme.typography.labelLarge
+        )
+    }
+}
+
+// ... Huds & Helpers Standard ...
 @Composable
 fun KeysHUD(collected: Int) {
     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f))) {
@@ -558,7 +709,6 @@ fun WeatherHUD(weather: String) {
                 "snow" -> Icons.Filled.AcUnit to Color.White
                 "clear" -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
                 else -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
-                //else -> Icons.Filled.Cloud to Color.LightGray
             }
             Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
         }

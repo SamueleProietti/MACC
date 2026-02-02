@@ -7,33 +7,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -43,6 +30,9 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import it.sapienza.forestanimalsgame.R
+import it.sapienza.forestanimalsgame.ui.theme.ForestButton
+import it.sapienza.forestanimalsgame.ui.theme.LobbyBackgroundContainer
+import it.sapienza.forestanimalsgame.ui.theme.ForestTextStyle
 
 class RegisterActivity : ComponentActivity() {
 
@@ -50,9 +40,7 @@ class RegisterActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     private val permissionsLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
-            // Qui potresti gestire il caso in cui i permessi non vengono dati
-        }
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ -> }
 
     private val cameraLauncher =
         registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
@@ -61,18 +49,11 @@ class RegisterActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        // ----------------------------
-
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         permissionsLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION,
-                Manifest.permission.CAMERA
-            )
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.CAMERA)
         )
 
         setContent {
@@ -88,15 +69,9 @@ class RegisterActivity : ComponentActivity() {
 
     private fun fetchLocation() {
         try {
-            fusedLocationClient.getCurrentLocation(
-                Priority.PRIORITY_HIGH_ACCURACY,
-                null
-            ).addOnSuccessListener { location ->
-                if (location != null) viewModel.setLocation(location)
-            }
-        } catch (e: SecurityException) {
-            // Gestione mancanza permessi
-        }
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { location -> if (location != null) viewModel.setLocation(location) }
+        } catch (e: SecurityException) { }
     }
 }
 
@@ -116,145 +91,111 @@ fun RegisterScreen(
     val done by viewModel.done.observeAsState(false)
     val loading by viewModel.loading.observeAsState(true)
 
-    // Carica profilo al primo avvio
-    LaunchedEffect(Unit) {
-        viewModel.loadMyProfile()
-    }
+    LaunchedEffect(Unit) { viewModel.loadMyProfile() }
+    LaunchedEffect(done) { if (done) onFinish() }
 
-    // Chiude l'activity se il salvataggio è completato
-    LaunchedEffect(done) {
-        if (done) onFinish()
-    }
+    LobbyBackgroundContainer {
 
-    // 1. SE STA CARICANDO, MOSTRA SOLO LA ROTELLA
-    if (loading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        // 2. ALTRIMENTI MOSTRA IL CONTENUTO
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Profilo", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(16.dp))
-
-            // --- SEZIONE POSIZIONE ---
-            if (location != null) {
-                Text(
-                    "Posizione: ${location?.latitude}, ${location?.longitude}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            } else {
-                Text("Posizione non disponibile", style = MaterialTheme.typography.bodyMedium)
+        if (loading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFFFFD54F))
             }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onRefreshLocation) { Text("Aggiorna posizione") }
-            // --------------------------
-
-            Spacer(Modifier.height(24.dp))
-
-            Button(onClick = onTakePhoto) { Text("Scatta foto") }
-
-            Spacer(Modifier.height(8.dp))
-
-            val hasPhoto = photo != null || !photoUrl.isNullOrBlank()
-            Text("Foto: " + (if (hasPhoto) "OK" else "Obbligatoria"))
-
-            Spacer(Modifier.height(8.dp))
-
-            Box(
+        } else {
+            Column(
                 modifier = Modifier
-                    .height(160.dp)
-                    .width(160.dp)
-                    .border(1.dp, MaterialTheme.colorScheme.outline),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Definisco il placeholder
-                val PlaceholderIcon = @Composable {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Manca foto",
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text("Nessuna foto", style = MaterialTheme.typography.bodySmall)
+                Text("Profilo Giocatore", style = MaterialTheme.typography.headlineMedium.merge(ForestTextStyle))
+                Spacer(Modifier.height(24.dp))
+
+                // --- POSIZIONE (Senza box nero, con coordinate) ---
+                if (location != null) {
+                    Text(
+                        text = "Lat: ${location!!.latitude}",
+                        style = ForestTextStyle,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Lng: ${location!!.longitude}",
+                        style = ForestTextStyle,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        text = "Posizione mancante",
+                        style = ForestTextStyle,
+                        color = Color.Red
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                ForestButton(text = "Aggiorna Posizione", onClick = onRefreshLocation, modifier = Modifier.width(200.dp).height(45.dp))
+
+                Spacer(Modifier.height(24.dp))
+
+                // --- FOTO ---
+                Box(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .border(3.dp, Color(0xFF8D6E63)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        photo != null -> Image(bitmap = photo!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        !photoUrl.isNullOrBlank() -> SubcomposeAsyncImage(model = photoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        else -> Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(60.dp), tint = Color.LightGray)
                     }
                 }
 
-                when {
-                    // Caso 1: Nuova foto appena scattata (locale)
-                    photo != null -> {
-                        Image(
-                            bitmap = photo!!.asImageBitmap(),
-                            contentDescription = "Foto profilo",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    // Caso 2: Foto esistente dal server
-                    !photoUrl.isNullOrBlank() -> {
-                        // ✅ FIX: Usiamo SubcomposeAsyncImage per supportare il blocco 'error' composable
-                        SubcomposeAsyncImage(
-                            model = photoUrl,
-                            contentDescription = "Foto profilo",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            error = { PlaceholderIcon() } // Ora questo è valido!
-                        )
-                    }
-                    // Caso 3: Nessuna foto
-                    else -> {
-                        PlaceholderIcon()
-                    }
+                Spacer(Modifier.height(12.dp))
+                ForestButton(text = "Scatta Foto", onClick = onTakePhoto, modifier = Modifier.width(200.dp).height(45.dp))
+
+                Spacer(Modifier.height(32.dp))
+
+                // --- AVATAR ---
+                Text("Scegli il tuo Avatar:", style = ForestTextStyle)
+                Spacer(Modifier.height(12.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AvatarChoice("fox", R.drawable.av_fox, avatarId == "fox") { viewModel.setAvatar("fox") }
+                    AvatarChoice("deer", R.drawable.av_deer, avatarId == "deer") { viewModel.setAvatar("deer") }
+                    AvatarChoice("wolf", R.drawable.av_wolf, avatarId == "wolf") { viewModel.setAvatar("wolf") }
+                    AvatarChoice("bear", R.drawable.av_bear, avatarId == "bear") { viewModel.setAvatar("bear") }
+                    AvatarChoice("boar", R.drawable.av_boar, avatarId == "boar") { viewModel.setAvatar("boar") }
                 }
-            }
 
-            Spacer(Modifier.height(24.dp))
-            Text("Scegli il tuo avatar:", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
+                if (!error.isNullOrBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(error!!, color = Color.Red, modifier = Modifier.background(Color.White).padding(4.dp))
+                }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AvatarChoice("fox", R.drawable.av_fox, avatarId == "fox") { viewModel.setAvatar("fox") }
-                AvatarChoice("deer", R.drawable.av_deer, avatarId == "deer") { viewModel.setAvatar("deer") }
-                AvatarChoice("wolf", R.drawable.av_wolf, avatarId == "wolf") { viewModel.setAvatar("wolf") }
-                AvatarChoice("bear", R.drawable.av_bear, avatarId == "bear") { viewModel.setAvatar("bear") }
-                AvatarChoice("boar", R.drawable.av_boar, avatarId == "boar") { viewModel.setAvatar("boar") }
-            }
+                Spacer(Modifier.height(40.dp))
 
-            if (!error.isNullOrBlank()) {
-                Spacer(Modifier.height(16.dp))
-                //Text(error!!, color = MaterialTheme.colorScheme.error)
-            }
-
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onRegister, enabled = !loading) {
-                Text(if (loading) "Salvataggio..." else "Salva profilo")
+                ForestButton(
+                    text = "SALVA PROFILO",
+                    onClick = onRegister,
+                    enabled = !loading,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AvatarChoice(
-    id: String,
-    resId: Int,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val borderWidth = if (selected) 2.dp else 0.dp
-    Image(
-        painter = painterResource(resId),
-        contentDescription = id,
+private fun AvatarChoice(id: String, resId: Int, selected: Boolean, onClick: () -> Unit) {
+    val borderColor = if (selected) Color(0xFFFFD54F) else Color.Transparent
+    Box(
         modifier = Modifier
-            .size(48.dp)
-            .border(borderWidth, MaterialTheme.colorScheme.primary)
+            .size(54.dp)
+            .border(3.dp, borderColor, MaterialTheme.shapes.small)
             .clickable { onClick() }
-            .padding(2.dp)
-    )
+            .padding(4.dp)
+    ) {
+        Image(painter = painterResource(resId), contentDescription = id, modifier = Modifier.fillMaxSize())
+    }
 }

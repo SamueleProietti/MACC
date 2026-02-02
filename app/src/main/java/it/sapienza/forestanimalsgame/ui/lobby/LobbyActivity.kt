@@ -18,9 +18,12 @@ import it.sapienza.forestanimalsgame.ui.theme.ForestAnimalsGameTheme
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.padding
+import it.sapienza.forestanimalsgame.ui.theme.LobbyBackgroundContainer
+import it.sapienza.forestanimalsgame.ui.theme.ForestTextStyle
 
 class LobbyActivity : ComponentActivity() {
 
@@ -28,56 +31,56 @@ class LobbyActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        // ----------------------------
 
         setContent {
             ForestAnimalsGameTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
 
-                    // Init: Avatar e Resume
                     LaunchedEffect(Unit) {
                         lobbyViewModel.loadMyAvatarId()
                         lobbyViewModel.resumeMyActiveSession()
                     }
 
-                    // Variabili di stato
                     val sessionId by lobbyViewModel.sessionId.observeAsState(null)
                     val session by lobbyViewModel.session.observeAsState(null)
                     val avatarId by lobbyViewModel.avatarId.observeAsState("fox")
-                    
+
                     val gameState by lobbyViewModel.gameState.observeAsState(null)
                     val gameStateLoaded by lobbyViewModel.gameStateLoaded.observeAsState(false)
 
-                    // Trigger caricamento dati quando si entra IN_GAME
                     LaunchedEffect(sessionId, session?.status) {
                         if (!sessionId.isNullOrBlank() && session?.status == "IN_GAME") {
                             lobbyViewModel.loadMyGameState(sessionId!!)
                         }
                     }
 
-                    // UI Logic: UN SOLO blocco 'when'
                     when {
                         sessionId.isNullOrBlank() -> {
                             LobbyEntryScreen(viewModel = lobbyViewModel)
                         }
 
                         session?.status == "IN_GAME" -> {
-                            // 1. Se stiamo caricando i dati, mostra il cerchio che gira
+                            // 1. CARICAMENTO DATI GIOCO (Con Sfondo Sfocato)
                             if (!gameStateLoaded) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator()
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Caricamento partita...", modifier = Modifier.padding(top = 40.dp))
+                                LobbyBackgroundContainer {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = Color(0xFFFFD54F))
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "Caricamento partita...",
+                                            style = ForestTextStyle,
+                                            modifier = Modifier.padding(top = 60.dp)
+                                        )
+                                    }
                                 }
                             } else {
-                                // 2. Solo quando i dati ci sono, mostra il gioco
+                                // 2. GIOCO CARICATO
                                 it.sapienza.forestanimalsgame.ui.game.GameScreen(
                                     sessionId = sessionId!!,
                                     session = session,
                                     avatarId = avatarId,
-                                    initialGameState = gameState, // Qui arriveranno i dati corretti
+                                    initialGameState = gameState,
                                     onAutoSave = { st -> lobbyViewModel.saveMyGameState(sessionId!!, st) },
                                     onStop = { state ->
                                         lifecycleScope.launch {
@@ -97,8 +100,6 @@ class LobbyActivity : ComponentActivity() {
                             )
                         }
                     }
-                    
-                    
                 }
             }
         }

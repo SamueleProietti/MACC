@@ -1,5 +1,8 @@
 package it.sapienza.forestanimalsgame.ui.lobby
 
+import android.content.Intent // <--- IMPORTANTE PER CONDIVIDERE
+import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,67 +12,64 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.data.model.ChatMessage
 import it.sapienza.forestanimalsgame.data.model.Member
 import it.sapienza.forestanimalsgame.data.model.Session
+import it.sapienza.forestanimalsgame.ui.theme.ForestButton
+import it.sapienza.forestanimalsgame.ui.theme.LobbyBackgroundContainer
+import it.sapienza.forestanimalsgame.ui.theme.ForestTextStyle
 
 @Composable
 fun LobbyEntryScreen(viewModel: LobbyViewModel) {
     val loading by viewModel.loading.observeAsState(false)
     val error by viewModel.error.observeAsState(null)
-
     var code by rememberSaveable { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Lobby", style = MaterialTheme.typography.headlineMedium)
-
-        OutlinedTextField(
-            value = code,
-            onValueChange = { code = it },
-            label = { Text("Codice sessione") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+    LobbyBackgroundContainer {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Button(
-                onClick = { viewModel.createSession() },
-                enabled = !loading,
-                modifier = Modifier.weight(1f)
-            ) { Text("Crea sessione") }
+            Spacer(Modifier.height(20.dp))
 
-            Button(
-                onClick = { viewModel.joinSession(code) },
-                enabled = !loading,
-                modifier = Modifier.weight(1f)
-            ) { Text("Entra") }
+            Text("Lobby Multiplayer", style = MaterialTheme.typography.headlineMedium.merge(ForestTextStyle))
+
+            Spacer(Modifier.height(20.dp))
+
+            OutlinedTextField(
+                value = code,
+                onValueChange = { code = it },
+                label = { Text("Codice sessione", color = Color.White) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFFFFD54F),
+                    unfocusedBorderColor = Color.White
+                )
+            )
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ForestButton(text = "Crea sessione", onClick = { viewModel.createSession() }, enabled = !loading, modifier = Modifier.weight(1f))
+                ForestButton(text = "Entra", onClick = { viewModel.joinSession(code) }, enabled = !loading, modifier = Modifier.weight(1f))
+            }
+
+            if (loading) CircularProgressIndicator(color = Color(0xFFFFD54F))
+
+            if (!error.isNullOrBlank()) {
+                Text(text = error!!, color = Color.Red, modifier = Modifier.background(Color.White.copy(alpha=0.8f)).padding(8.dp))
+            }
         }
-
-        if (loading) {
-            CircularProgressIndicator()
-        }
-
-        if (!error.isNullOrBlank()) {
-            Text(text = error!!, color = MaterialTheme.colorScheme.error)
-        }
-
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Suggerimento: per ora il codice è l’ID del documento Firestore.",
-            style = MaterialTheme.typography.bodySmall
-        )
     }
 }
 
@@ -78,122 +78,106 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
     val session by viewModel.session.observeAsState(null)
     val messages by viewModel.messages.observeAsState(emptyList())
     val error by viewModel.error.observeAsState(null)
-
-    // 🔧 NON usare remember qui: se currentUser è null al primo render, resti bloccato.
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-
     val isHost = (currentUid != null && session?.hostUid == currentUid)
-
-    // ✅ regola: basta 1 giocatore, sessione in LOBBY e devi essere host
     val canStart = (session?.members?.size ?: 0) >= 1 && (session?.status == "LOBBY") && isHost
-
     var messageText by rememberSaveable { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Surface(shadowElevation = 2.dp) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Sessione", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(sessionId, style = MaterialTheme.typography.bodySmall)
-                    Text("Stato: ${session?.status ?: "..."}", style = MaterialTheme.typography.bodySmall)
-                }
-                OutlinedButton(onClick = { viewModel.leaveSession() }) {
-                    Text("Esci")
+    val context = LocalContext.current
+
+    LobbyBackgroundContainer {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // --- INFO SESSIONE + TASTO CONDIVIDI ---
+            Card(colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha=0.6f))) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Codice Sessione:", style = ForestTextStyle, fontSize = 14.sp)
+                        Text(sessionId, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+
+                    // TASTO CONDIVIDI (SHARE SHEET)
+                    ForestButton(
+                        text = "Condividi", // Era "Copia"
+                        onClick = {
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, "Gioca con me a Forest Animals! Codice: $sessionId")
+                                type = "text/plain"
+                            }
+                            val shareIntent = Intent.createChooser(sendIntent, "Invita amici")
+                            context.startActivity(shareIntent)
+                        },
+                        modifier = Modifier.width(100.dp).height(40.dp),
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    ForestButton(
+                        text = "Esci",
+                        onClick = { viewModel.leaveSession() },
+                        modifier = Modifier.width(70.dp).height(40.dp),
+                        fontSize = 12.sp
+                    )
                 }
             }
-        }
 
-        MembersCard(session)
+            MembersCard(session)
+            Text("Chat", style = ForestTextStyle)
 
-        Text("Chat", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            if (messages.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nessun messaggio")
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(messages) { msg ->
-                        ChatBubble(msg, currentUid)
+            Card(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFDCF8C6).copy(alpha=0.9f))
+            ) {
+                if (messages.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nessun messaggio", color = Color.DarkGray)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(messages) { msg -> ChatBubble(msg, currentUid) }
                     }
                 }
             }
-        }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = messageText,
-                onValueChange = { messageText = it },
-                label = { Text("Messaggio") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            Button(
-                onClick = {
-                    viewModel.sendMessage(messageText)
-                    messageText = ""
-                },
-                enabled = messageText.isNotBlank()
-            ) { Text("Invia") }
-        }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    label = { Text("Messaggio", color = Color.White) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFFFD54F), unfocusedBorderColor = Color.White)
+                )
+                ForestButton(text = "Invia", onClick = { viewModel.sendMessage(messageText); messageText = "" }, enabled = messageText.isNotBlank(), modifier = Modifier.width(80.dp))
+            }
 
-        Button(
-            onClick = { viewModel.startGameIfHost() },
-            enabled = canStart,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (isHost) "Start" else "Attendi host")
-        }
+            ForestButton(text = if (isHost) "START GAME" else "Attendi l'Host...", onClick = { viewModel.startGameIfHost() }, enabled = canStart, modifier = Modifier.fillMaxWidth())
 
-        if (!error.isNullOrBlank()) {
-            Text(text = error!!, color = MaterialTheme.colorScheme.error)
+            if (!error.isNullOrBlank()) Text(text = error!!, color = Color.Red, modifier = Modifier.background(Color.White).padding(4.dp))
         }
     }
 }
 
+// ... MembersCard e ChatBubble rimangono uguali ...
 @Composable
 private fun MembersCard(session: Session?) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha=0.5f))) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Membri (${session?.members?.size ?: 0}/4)", fontWeight = FontWeight.Bold)
-            val members: List<Member> = session?.members ?: emptyList()
-
-            if (members.isEmpty()) {
-                Text("In attesa di membri...", style = MaterialTheme.typography.bodySmall)
-            } else {
-                members.forEach { m ->
-                    Text("• ${m.displayName} (${m.avatar})", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
+            Text("Membri (${session?.members?.size ?: 0}/4)", style = ForestTextStyle)
+            session?.members?.forEach { m -> Text("• ${m.displayName} (${m.avatar})", color = Color.White) } ?: Text("In attesa...", color = Color.LightGray)
         }
     }
 }
@@ -201,26 +185,10 @@ private fun MembersCard(session: Session?) {
 @Composable
 private fun ChatBubble(msg: ChatMessage, currentUid: String?) {
     val mine = (currentUid != null && msg.senderUid == currentUid)
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (mine) Alignment.End else Alignment.Start
-    ) {
-        Text(
-            text = msg.senderName,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Surface(
-            shadowElevation = 1.dp,
-            shape = MaterialTheme.shapes.medium
-        ) {
-            Text(
-                text = msg.text,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+        Text(text = msg.senderName, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+        Surface(shadowElevation = 1.dp, shape = MaterialTheme.shapes.medium, color = if(mine) Color(0xFFDCF8C6) else Color.White) {
+            Text(text = msg.text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Color.Black)
         }
     }
 }
