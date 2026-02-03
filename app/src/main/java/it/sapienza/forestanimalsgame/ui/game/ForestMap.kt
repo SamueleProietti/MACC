@@ -41,9 +41,8 @@ fun rememberForestResources(): Map<SceneryType, ImageBitmap> {
     val log = ImageBitmap.imageResource(R.drawable.tronco)
     val sign = ImageBitmap.imageResource(R.drawable.cartello)
 
-    // PLACEHOLDER: Sostituisci con R.drawable.gabbia e R.drawable.av_orso (o altro animale)
-    val cage = ImageBitmap.imageResource(R.drawable.cage) // Uso tronco come placeholder gabbia
-    val npc = ImageBitmap.imageResource(R.drawable.av_bear) // Uso orso come prigioniero
+    val cage = ImageBitmap.imageResource(R.drawable.cage)
+    val npc = ImageBitmap.imageResource(R.drawable.av_bear)
 
     return remember(pine, oak, bush, rock, mushRed, mushGroup, log, sign, cage, npc) {
         mapOf(

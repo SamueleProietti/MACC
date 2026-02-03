@@ -1,5 +1,6 @@
 package it.sapienza.forestanimalsgame.data.repository
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -43,10 +44,8 @@ class LobbyRepositoryImpl(
             val session = snap.toObject(Session::class.java) ?: return@runTransaction false
             val members = session.members.toMutableList()
 
-            // già dentro?
             if (members.any { it.uid == uid }) return@runTransaction true
 
-            // limite pragmatico
             if (members.size >= 4) return@runTransaction false
 
             members.add(Member(uid = uid, displayName = name, avatar = avatarId))
@@ -127,7 +126,6 @@ class LobbyRepositoryImpl(
             .add(msg)
             .await()
 
-        // opzionale: bump updatedAt session
         sessions.document(sessionId).update("updatedAt", System.currentTimeMillis()).await()
     }
 
@@ -159,7 +157,6 @@ class LobbyRepositoryImpl(
     // ---------------- RESUME SESSION ----------------
 
     override suspend fun findActiveSessionForUser(uid: String): String? {
-        // ✅ niente indici complessi: una sola whereArrayContains
         val snap = sessions
             .whereArrayContains("memberUids", uid)
             .limit(20)
@@ -173,7 +170,6 @@ class LobbyRepositoryImpl(
             s.status != "FINISHED"
         }
 
-        // scegli la più recente (startedAt se c’è, altrimenti createdAt)
         return candidates.maxByOrNull { (_, s) -> (s.startedAt ?: s.createdAt) }?.first
     }
 
@@ -190,14 +186,26 @@ class LobbyRepositoryImpl(
     }
 
     override suspend fun saveGameState(sessionId: String, uid: String, state: GameState) {
-        sessions.document(sessionId)
-            .collection("gameState")
-            .document(uid)
-            .set(state.copy(updatedAt = System.currentTimeMillis()))
-            .await()
 
-        // opzionale: bump updatedAt session
-        sessions.document(sessionId).update("updatedAt", System.currentTimeMillis()).await()
+        Log.d("REPO_DEBUG", "Tento di salvare stato per $uid: $state")
+
+        try {
+            sessions.document(sessionId)
+                .collection("gameState")
+                .document(uid)
+                .set(state.copy(updatedAt = System.currentTimeMillis()))
+                .await()
+            Log.d("REPO_DEBUG", "Salvataggio RIUSCITO!")
+        } catch (e: Exception) {
+            Log.e("REPO_DEBUG", "ERRORE SALVATAGGIO: ${e.message}")
+        }
+
+
+        try {
+            sessions.document(sessionId).update("updatedAt", System.currentTimeMillis()).await()
+        } catch (e: Exception) {
+
+        }
     }
 
     override suspend fun finishSessionIfIdle(sessionId: String, idleTimeoutMs: Long): Boolean {
@@ -215,7 +223,6 @@ class LobbyRepositoryImpl(
             val idle = now - updatedAt
             if (idle < idleTimeoutMs) return@runTransaction false
 
-            // ✅ chiusura zombie: chiunque può farla se davvero idle (semplice e robusto)
             tx.update(
                 ref,
                 mapOf(
@@ -225,6 +232,43 @@ class LobbyRepositoryImpl(
             )
             true
         }.await()
+    }
+
+    override fun listenGameStates(sessionId: String, onUpdate: (List<GameState>) -> Unit): () -> Unit {
+        Log.d("REPO_DEBUG", "Inizio ascolto GameStates per sessione: $sessionId")
+
+        val reg = sessions.document(sessionId)
+            .collection("gameState")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    Log.e("REPO_DEBUG", "Errore listener: ${err.message}")
+                    onUpdate(emptyList())
+                    return@addSnapshotListener
+                }
+
+                val count = snap?.documents?.size ?: 0
+                Log.d("REPO_DEBUG", "Listener ha ricevuto $count documenti")
+
+                val states = snap?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(GameState::class.java)
+                    } catch (e: Exception) {
+                        Log.e("REPO_DEBUG", "Errore conversione documento ${doc.id}: ${e.message}")
+                        null
+                    }
+                } ?: emptyList()
+
+                Log.d("REPO_DEBUG", "Stati convertiti correttamente: ${states.size}")
+                if (states.isNotEmpty()) {
+                    Log.d("REPO_DEBUG", "Primo stato completato: ${states[0].completed}")
+                }
+
+                onUpdate(states)
+            }
+        return {
+            Log.d("REPO_DEBUG", "Listener rimosso")
+            reg.remove()
+        }
     }
 
 }

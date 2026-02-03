@@ -79,7 +79,7 @@ fun MinigameCompass(
     var holdProgress by remember { mutableFloatStateOf(0f) }
     var showWinDialog by remember { mutableStateOf(false) }
 
-    // TIMER (Nuovo)
+    // TIMER
     var timeLeft by remember { mutableIntStateOf(20) }
     var showTimeoutDialog by remember { mutableStateOf(false) }
     var isRunning by remember { mutableStateOf(true) }

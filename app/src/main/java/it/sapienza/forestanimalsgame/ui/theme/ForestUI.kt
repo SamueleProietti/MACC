@@ -19,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import it.sapienza.forestanimalsgame.R
 
 // --- BOTTONE RPG ---
@@ -59,15 +61,14 @@ fun ForestButton(
     }
 }
 
-// --- SFONDO LOGIN ---
+// --- SFONDO LOGIN (Nitido) ---
 @Composable
 fun LoginBackgroundContainer(content: @Composable BoxScope.() -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.background_login),
             contentDescription = null,
-            // CAMBIATO DA Crop A FillBounds per mostrare tutta l'immagine
-            contentScale = ContentScale.FillBounds,
+            contentScale = ContentScale.FillBounds, // Adatta tutto allo schermo
             modifier = Modifier.fillMaxSize()
         )
         content()
@@ -79,7 +80,7 @@ fun LoginBackgroundContainer(content: @Composable BoxScope.() -> Unit) {
 fun LobbyBackgroundContainer(content: @Composable BoxScope.() -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
-            painter = painterResource(id = R.drawable.background_lobby_blurred), // Crea questa immagine sfocata
+            painter = painterResource(id = R.drawable.background_lobby_blurred),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -94,6 +95,92 @@ fun LobbyBackgroundContainer(content: @Composable BoxScope.() -> Unit) {
                 .systemBarsPadding()
         ) {
             content()
+        }
+    }
+}
+
+// --- POPUP STILE RPG (AGGIUNTO ORA) ---
+@Composable
+fun ForestDialog(
+    title: String,
+    text: String,
+    onDismiss: () -> Unit,
+    confirmText: String,
+    confirmAction: () -> Unit,
+    dismissText: String? = null,
+    dismissAction: (() -> Unit)? = null
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Sfondo Cartello (sign_large)
+            Image(
+                painter = painterResource(id = R.drawable.sign_large),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .width(350.dp)
+                    .height(300.dp)
+            )
+
+            // Contenuto Testo e Bottoni
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .width(300.dp)
+                    .padding(16.dp)
+            ) {
+                // Titolo (Oro con Ombra)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            offset = Offset(2f, 2f),
+                            blurRadius = 2f
+                        )
+                    ),
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFFFFE082), // ORO
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Testo Corpo (Bianco Panna)
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.5f),
+                            offset = Offset(1f, 1f),
+                            blurRadius = 1f
+                        )
+                    ),
+                    color = Color(0xFFFFF8E1),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Bottoni
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (dismissText != null && dismissAction != null) {
+                        ForestButton(text = dismissText, onClick = dismissAction, modifier = Modifier.width(110.dp), fontSize = 14.sp)
+                    }
+
+                    ForestButton(text = confirmText, onClick = confirmAction, modifier = Modifier.width(110.dp), fontSize = 14.sp)
+                }
+            }
         }
     }
 }

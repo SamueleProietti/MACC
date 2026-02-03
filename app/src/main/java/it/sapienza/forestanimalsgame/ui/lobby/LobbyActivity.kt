@@ -49,9 +49,16 @@ class LobbyActivity : ComponentActivity() {
                     val gameState by lobbyViewModel.gameState.observeAsState(null)
                     val gameStateLoaded by lobbyViewModel.gameStateLoaded.observeAsState(false)
 
+                    // 1. Appena entra in gioco, carica il MIO stato (posizione, ecc.)
                     LaunchedEffect(sessionId, session?.status) {
                         if (!sessionId.isNullOrBlank() && session?.status == "IN_GAME") {
                             lobbyViewModel.loadMyGameState(sessionId!!)
+                        }
+                    }
+
+                    LaunchedEffect(gameStateLoaded) {
+                        if (gameStateLoaded && !sessionId.isNullOrBlank()) {
+                            lobbyViewModel.listenToGameState(sessionId!!)
                         }
                     }
 

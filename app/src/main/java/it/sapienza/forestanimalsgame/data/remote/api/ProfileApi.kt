@@ -10,7 +10,6 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Part
 
-// ✅ FIX: Aggiunto @SerializedName per forzare i nomi corretti nel JSON
 data class ProfileMeUpsertRequest(
     @SerializedName("nickname") val nickname: String? = null,
     @SerializedName("lat") val lat: Double? = null,

@@ -25,7 +25,6 @@ fun RainOverlay() {
         label = "rain_tick"
     )
 
-    // Generiamo le gocce una volta sola
     val drops = remember { List(150) { Random.nextFloat() to Random.nextFloat() } }
 
     Canvas(modifier = Modifier.fillMaxSize()) {

@@ -13,6 +13,6 @@ data class GameState(
     val panY: Double = 0.0,
     val zoom: Double = 1.0,
 
-    // ✅ "ultimo aggiornamento vince"
+    // "ultimo aggiornamento vince"
     val updatedAt: Long = System.currentTimeMillis()
 )

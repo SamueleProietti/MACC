@@ -30,6 +30,7 @@ import it.sapienza.forestanimalsgame.data.repository.ProfileRepositoryImpl
 import it.sapienza.forestanimalsgame.ui.theme.ForestButton
 import it.sapienza.forestanimalsgame.ui.theme.LoginBackgroundContainer
 import it.sapienza.forestanimalsgame.ui.theme.LobbyBackgroundContainer
+import it.sapienza.forestanimalsgame.ui.theme.AppAudio
 import it.sapienza.forestanimalsgame.ui.theme.ForestTextStyle
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +43,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         credentialManager = CredentialManager.create(this)
+
+        // --- AVVIO MUSICA GLOBALE ---
+        AppAudio.init(this)
+        AppAudio.startMusic()
+        // ----------------------------
 
         setContent {
             ForestAnimalsGameTheme {

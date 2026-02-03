@@ -45,7 +45,7 @@ class RegisterViewModel(
     fun loadMyProfile() {
         viewModelScope.launch {
             _error.value = null // Resetta errori precedenti
-            // loading è già true dall'inizializzazione, ma se vuoi puoi rimetterlo a true qui
+
             
             try {
                 val profile = repo.getMyProfile()
@@ -69,20 +69,15 @@ class RegisterViewModel(
                 // _done.value = true 
 
             } catch (e: Exception) {
-                // 🔍 ANALISI DELL'ERRORE
                 if (e is HttpException && e.code() == 404) {
-                    // ✅ CASO 404: NUOVO UTENTE
-                    // Non fare nulla! Non è un errore. 
-                    // L'app resterà con i campi vuoti pronti per essere compilati.
-                    // (Logghiamo solo per noi sviluppatori se serve)
+
                     println("Nuovo utente rilevato (404), mostro form vuoto.")
                 } else {
-                    // ❌ ALTRI ERRORI (500, 401, 403, ecc.)
-                    // Questi sono problemi veri, mostriamoli all'utente.
+
                     _error.value = "Errore caricamento: ${e.localizedMessage}"
                 }
             } finally {
-                // In ogni caso (successo, 404 o errore 500), togliamo la rotella
+
                 _loading.value = false
             }
         }

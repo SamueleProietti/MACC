@@ -8,10 +8,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 object ApiClient {
     private const val BASE_URL = "https://forestanimal-api-1002662831596.europe-west12.run.app/"
 
-    // ✅ Logger: Ti mostra nel Logcat esattamente cosa invii e ricevi
     private val client: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor()
-        logging.setLevel(HttpLoggingInterceptor.Level.BODY) // Mostra tutto il contenuto (JSON)
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY)
 
         OkHttpClient.Builder()
             .addInterceptor(logging)
@@ -21,7 +20,7 @@ object ApiClient {
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
-            .client(client) // ⬅️ Importante: usa il client con il logger
+            .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }

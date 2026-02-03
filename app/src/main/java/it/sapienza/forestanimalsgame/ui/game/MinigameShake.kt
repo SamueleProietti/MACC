@@ -41,7 +41,7 @@ fun MinigameShake(
     var isWon by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
 
-    // TIMER (Nuovo)
+    // TIMER
     var timeLeft by remember { mutableIntStateOf(20) } // 20 Secondi
     var showTimeoutDialog by remember { mutableStateOf(false) }
     var isRunning by remember { mutableStateOf(true) }

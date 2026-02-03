@@ -5,14 +5,12 @@ data class Session(
     val status: String = "LOBBY", // LOBBY | IN_GAME | FINISHED
     val members: List<Member> = emptyList(),
 
-    // ✅ NEW: array semplice interrogabile per resume
+    // array semplice interrogabile per resume
     val memberUids: List<String> = emptyList(),
 
     val createdAt: Long = System.currentTimeMillis(),
 
-    // già presente
     val startedAt: Long? = null,
 
-    // ✅ NEW: utile per ordinare lato client (se vuoi)
     val updatedAt: Long = System.currentTimeMillis()
 )

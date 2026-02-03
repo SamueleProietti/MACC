@@ -1,9 +1,8 @@
 package it.sapienza.forestanimalsgame.ui.game
 
-import android.app.Activity
+import android.util.Log
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -13,50 +12,48 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.google.firebase.auth.FirebaseAuth
 import it.sapienza.forestanimalsgame.R
 import it.sapienza.forestanimalsgame.data.model.GameState
 import it.sapienza.forestanimalsgame.data.model.Session
+import it.sapienza.forestanimalsgame.ui.theme.ForestButton
+import it.sapienza.forestanimalsgame.ui.theme.ForestDialog
+import it.sapienza.forestanimalsgame.ui.theme.AppAudio
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.compose.material.icons.filled.AcUnit
 import kotlin.math.hypot
-import kotlin.math.max
 
 // --- CONFIGURAZIONE ---
-const val DEBUG_MODE = false
+const val DEBUG_MODE = true
 const val AVATAR_SIZE_PX = 150f
 const val DRAW_OFFSET_Y = 15f
 const val FIXED_ZOOM = 1f
@@ -100,16 +97,25 @@ fun GameScreen(
     onLeave: () -> Unit
 ) {
     val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "unknown" }
-    val context = LocalContext.current // Serve per il tasto "Menu" (Back)
+    val context = LocalContext.current
 
     // 1. SETUP MONDO
     val worldSize = remember { Size(width = 4000f, height = 4000f) }
     val worldCenter = remember(worldSize) { Offset(worldSize.width / 2f, worldSize.height / 2f) }
     val spawn = remember(currentUid, worldCenter) { uidToSpawn(currentUid, worldCenter) }
 
-    // 2. RISORSE
-    val resId = remember(avatarId) { avatarResId(avatarId) }
-    val avatarBitmap = remember(resId) { ImageBitmap.imageResource(context.resources, resId) }
+    // 2. RISORSE GRAFICHE
+    val allAvatars = remember {
+        mapOf(
+            "fox" to ImageBitmap.imageResource(context.resources, R.drawable.av_fox),
+            "bear" to ImageBitmap.imageResource(context.resources, R.drawable.av_bear),
+            "wolf" to ImageBitmap.imageResource(context.resources, R.drawable.av_wolf),
+            "boar" to ImageBitmap.imageResource(context.resources, R.drawable.av_boar),
+            "deer" to ImageBitmap.imageResource(context.resources, R.drawable.av_deer)
+        )
+    }
+
+    val myAvatarBitmap = allAvatars[avatarId] ?: allAvatars["fox"]!!
 
     val terrainTile = rememberTerrainTile()
     val pathTile = rememberPathTile()
@@ -118,7 +124,17 @@ fun GameScreen(
 
     val staticScenery = remember(worldSize) { generateForestScenery(worldSize, 250) }
 
-    // 3. STATO
+    val infiniteTransition = rememberInfiniteTransition(label = "marker_anim")
+    val markerBobY by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -10f, 
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "bobbing"
+    )
+
+    // 3. STATO GIOCO
     val zoomState = rememberSaveable { mutableStateOf(FIXED_ZOOM) }
     val panState = rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(Offset.Zero) }
     var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
@@ -126,24 +142,58 @@ fun GameScreen(
     var avatar by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(spawn) }
     var target by rememberSaveable(stateSaver = OffsetSaver) { mutableStateOf(spawn) }
 
-    // STATO MISSIONI & CHIAVI
+    // STATO MISSIONI
     var selectedQuest by remember { mutableStateOf<QuestSpot?>(null) }
     var activeQuestId by rememberSaveable { mutableStateOf<String?>(null) }
     var activeMinigame by remember { mutableStateOf<QuestType?>(null) }
 
+    // STATO PRINCIPALE
     var completed by rememberSaveable(stateSaver = StringSetSaver) { mutableStateOf(setOf<String>()) }
-    var collectedKeys by rememberSaveable { mutableIntStateOf(0) }
 
+    // CALCOLO DERIVATO
+    val collectedKeys = completed.size
     val isGameWon = collectedKeys >= 3
 
+    // Dialoghi
     var showIntroDialog by rememberSaveable { mutableStateOf(true) }
     var showWinDialog by rememberSaveable { mutableStateOf(false) }
     var showCageDialog by remember { mutableStateOf(false) }
     var showBearDialog by remember { mutableStateOf(false) }
+    var showAlreadyCollectedDialog by remember { mutableStateOf(false) }
 
+    val currentServerState by rememberUpdatedState(initialGameState)
+
+    // DEBUG LOOP
+    LaunchedEffect(Unit) {
+        while (true) {
+            val serverList = currentServerState?.completed ?: emptyList()
+            val localList = completed.toList()
+            if (DEBUG_MODE) {
+                Log.d("GAME_DEBUG", "Keys: $collectedKeys | Local: $localList | Server: $serverList")
+            }
+            delay(2000)
+        }
+    }
+
+    // SYNC MULTIPLAYER
+    LaunchedEffect(initialGameState) {
+        if (initialGameState != null) {
+            val serverCompleted = initialGameState.completed.toSet()
+            val merged = completed + serverCompleted
+
+            if (merged.size > completed.size) {
+                completed = merged
+                if (merged.size >= 3 && !showWinDialog) {
+                    showWinDialog = true
+                    AppAudio.playWin()
+                }
+            }
+        }
+    }
+
+    // Gestione Intro
     LaunchedEffect(collectedKeys) {
         if (collectedKeys > 0) showIntroDialog = false
-        if (collectedKeys == 3) showWinDialog = true
     }
 
     val questSpots = remember {
@@ -154,13 +204,11 @@ fun GameScreen(
         )
     }
 
-    // Meteo e Notte fissi per ora (Rimossi i tasti di test)
     val testWeather by remember { mutableStateOf(currentWeather) }
     val testNight by remember { mutableStateOf(isNightTime) }
-
     val vividFilter = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.4f) }) }
 
-    // HYDRATE
+    // HYDRATE INIZIALE
     var hydrated by remember(sessionId, currentUid) { mutableStateOf(false) }
     LaunchedEffect(sessionId, currentUid, initialGameState) {
         if (hydrated) return@LaunchedEffect
@@ -195,28 +243,31 @@ fun GameScreen(
         }
     }
 
+    // LOOP DI GIOCO
     LaunchedEffect(target) {
         while (true) {
             val dx = target.x - avatar.x
             val dy = target.y - avatar.y
             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-            val speed = 10f
+            val speed = 12f
 
             if (dist < speed) {
                 avatar = target
                 break
             }
+
             val stepX = (dx / dist) * speed
             val stepY = (dy / dist) * speed
-
             avatar = clampCenter(Offset(avatar.x + stepX, avatar.y + stepY), worldSize.width, worldSize.height)
+
             delay(16)
         }
     }
 
+    // AUTOSAVE
     LaunchedEffect(sessionId, currentUid) {
         snapshotFlow {
-            listOf(avatar.x, avatar.y, target.x, target.y, zoomState.value, panState.value.x, panState.value.y, activeQuestId, completed.size)
+            listOf(avatar.x, avatar.y, target.x, target.y, activeQuestId, completed.size)
         }
             .distinctUntilChanged()
             .debounce(1000)
@@ -250,20 +301,21 @@ fun GameScreen(
                             panState.value = clampPanStrict(tentativePan, cw, ch, worldSize.width, worldSize.height, FIXED_ZOOM)
                         }
                     }
-                    .pointerInput(isGameWon) { // Key su isGameWon per aggiornare i click
+                    .pointerInput(isGameWon) {
                         detectTapGestures { tap ->
                             val currentPan = panState.value
                             val worldTap = (tap - currentPan) / FIXED_ZOOM
+
+                            AppAudio.playClick()
 
                             val hitQuest = questSpots.firstOrNull { spot ->
                                 hypot((worldTap.x - spot.position.x).toDouble(), (worldTap.y - spot.position.y).toDouble()) <= spot.radiusPx
                             }
 
-                            // LOGICA DI CLIC GABBIA/ORSO
                             var hitCage: SceneryObject? = null
                             var hitBear: SceneryObject? = null
 
-                            if (!isGameWon) {
+                            if (collectedKeys < 3) {
                                 hitCage = staticScenery.firstOrNull {
                                     it.type == SceneryType.CAGE &&
                                             hypot((worldTap.x - it.x).toDouble(), (worldTap.y - it.y).toDouble()) <= 150f
@@ -336,9 +388,6 @@ fun GameScreen(
                         drawQueue.add(object : DrawableItem {
                             override val y = quest.position.y
                             override fun draw(scope: DrawScope) {
-                                val isCompleted = quest.id in completed
-                                if (isCompleted) return
-
                                 val w = signBitmap.width.toFloat() * 3.5f
                                 val h = signBitmap.height.toFloat() * 3.5f
                                 scope.drawImage(image = signBitmap, dstOffset = IntOffset((quest.position.x - w/2).toInt(), (quest.position.y - h).toInt()), dstSize = IntSize(w.toInt(), h.toInt()))
@@ -346,27 +395,87 @@ fun GameScreen(
                         })
                     }
 
+                    // DISEGNO AVATAR
                     drawQueue.add(object : DrawableItem {
                         override val y = avatar.y + 20f
                         override fun draw(scope: DrawScope) {
-                            scope.drawImage(
-                                image = avatarBitmap,
-                                dstOffset = IntOffset(
-                                    (avatar.x - AVATAR_SIZE_PX/2).toInt(),
-                                    (avatar.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()
-                                ),
-                                dstSize = IntSize(AVATAR_SIZE_PX.toInt(), AVATAR_SIZE_PX.toInt())
+                            val w = myAvatarBitmap.width.toFloat()
+                            val h = myAvatarBitmap.height.toFloat()
+                            val scale = AVATAR_SIZE_PX / h
+                            val finalW = w * scale
+                            val finalH = h * scale
+                            val isGoingLeft = target.x < avatar.x
+
+                            scope.withTransform({
+                                translate(avatar.x, avatar.y - finalH + DRAW_OFFSET_Y)
+                                if (isGoingLeft) {
+                                    scale(-1f, 1f, pivot = Offset.Zero)
+                                }
+                            }) {
+                                scope.drawImage(
+                                    image = myAvatarBitmap,
+                                    dstOffset = IntOffset((-finalW / 2).toInt(), 0),
+                                    dstSize = IntSize(finalW.toInt(), finalH.toInt()),
+                                    filterQuality = FilterQuality.None
+                                )
+                            }
+
+
+                            val markerW = 20f
+                            val markerH = 35f
+
+                            val markerCenterX = avatar.x
+                            val markerCenterYBase = avatar.y - finalH
+                            val markerCenterY = markerCenterYBase + markerBobY - (markerH / 2) + 35f
+
+                            val diamondPath = Path().apply {
+                                moveTo(markerCenterX, markerCenterY - markerH / 2)
+                                lineTo(markerCenterX + markerW / 2, markerCenterY)
+                                lineTo(markerCenterX, markerCenterY + markerH / 2)
+                                lineTo(markerCenterX - markerW / 2, markerCenterY)
+                                close()
+                            }
+
+                            // 1. Riempimento
+                            scope.drawPath(
+                                path = diamondPath,
+                                color = Color(0xFF00E676).copy(alpha = 0.9f),
+                                style = Fill
+                            )
+
+                            // 2. Bordo
+                            scope.drawPath(
+                                path = diamondPath,
+                                color = Color(0xFF006400),
+                                style = Stroke(width = 2f)
                             )
                         }
                     })
 
+                    // DISEGNO ALTRI GIOCATORI
                     session?.members?.forEach { m ->
                         if (m.uid != currentUid) {
                             val pos = uidToSpawn(m.uid, worldCenter)
+                            val otherAvatar = allAvatars[m.avatar] ?: allAvatars["fox"]!!
+
                             drawQueue.add(object : DrawableItem {
                                 override val y = pos.y + 20f
                                 override fun draw(scope: DrawScope) {
-                                    scope.drawImage(image = avatarBitmap, dstOffset = IntOffset((pos.x - AVATAR_SIZE_PX/2).toInt(), (pos.y - AVATAR_SIZE_PX + DRAW_OFFSET_Y).toInt()), dstSize = IntSize(AVATAR_SIZE_PX.toInt(), AVATAR_SIZE_PX.toInt()), alpha = 0.6f)
+                                    val w = otherAvatar.width.toFloat()
+                                    val h = otherAvatar.height.toFloat()
+                                    val scale = AVATAR_SIZE_PX / h
+                                    val finalW = w * scale
+                                    val finalH = h * scale
+
+                                    // Gli altri giocatori erano già centrati con (pos.x - finalW/2)
+                                    // Mantengo la logica coerente
+                                    scope.drawImage(
+                                        image = otherAvatar,
+                                        dstOffset = IntOffset((pos.x - finalW/2).toInt(), (pos.y - finalH + DRAW_OFFSET_Y).toInt()),
+                                        dstSize = IntSize(finalW.toInt(), finalH.toInt()),
+                                        alpha = 0.7f,
+                                        filterQuality = FilterQuality.None
+                                    )
                                 }
                             })
                         }
@@ -374,12 +483,6 @@ fun GameScreen(
 
                     drawQueue.sortBy { it.y }
                     drawQueue.forEach { it.draw(this) }
-
-                    if (DEBUG_MODE) {
-                        drawCircle(Color.Red, radius = 10f, center = target, style = Stroke(width=3f))
-                        drawCircle(Color.Blue, radius = 15f, center = avatar, style = Stroke(width=3f))
-                        drawLine(Color.Green, start = avatar, end = target, strokeWidth = 2f)
-                    }
                 }
             }
         }
@@ -400,20 +503,22 @@ fun GameScreen(
         ) {
             // TOP BAR
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                // SINISTRA: HUD Tempo
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TimeHUD(testNight)
+                    if (DEBUG_MODE) {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha=0.7f))) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("Keys: $collectedKeys", color = Color.Green, fontSize = 12.sp)
+                                Text("List: ${completed.joinToString()}", color = Color.Yellow, fontSize = 10.sp)
+                            }
+                        }
+                    }
                 }
-
-                // CENTRO: Chiavi
                 KeysHUD(collectedKeys)
-
-                // DESTRA: Meteo + Test Chiave
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
                     WeatherHUD(testWeather)
-                    // Bottone Test Chiave (Spostato qui)
                     Button(
-                        onClick = { if(collectedKeys < 3) collectedKeys += 1 },
+                        onClick = { },
                         enabled = collectedKeys < 3,
                         modifier = Modifier.height(35.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp)
@@ -421,114 +526,94 @@ fun GameScreen(
                 }
             }
 
-            // BOTTOM BAR (3 Pulsanti: Reset, Menu, Esci)
+            // BOTTOM BAR
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-
-                // 1. RESET (Posizione)
-                ForestButton(
-                    text = "Reset",
-                    onClick = { avatar = spawn; target = spawn },
-                    modifier = Modifier.width(100.dp)
-                )
-
-                // 2. MENU (Torna indietro senza chiudere sessione)
-                ForestButton(
-                    text = "Menu",
-                    onClick = { (context as? Activity)?.onBackPressed() },
-                    modifier = Modifier.width(100.dp)
-                )
-
-                // 3. ESCI (Chiude sessione)
-                ForestButton(
-                    text = "Esci",
-                    onClick = onLeave,
-                    modifier = Modifier.width(100.dp)
-                )
+                ForestButton(text = "Reset", onClick = { avatar = spawn; target = spawn }, modifier = Modifier.width(100.dp))
+                ForestButton(text = "Menu", onClick = { (context as? android.app.Activity)?.onBackPressed() }, modifier = Modifier.width(100.dp))
+                ForestButton(text = "Esci", onClick = onLeave, modifier = Modifier.width(100.dp))
             }
         }
 
-        // --- 4. OVERLAY MINIGIOCHI ---
+        // --- GESTIONE VITTORIA MINIGIOCHI ---
+        val handleWin = {
+            val qId = activeQuestId
+
+            if (qId != null) {
+                if (completed.contains(qId)) {
+                    showAlreadyCollectedDialog = true
+                } else {
+                    val newCompleted = completed + qId
+                    completed = newCompleted
+
+                    if (newCompleted.size >= 3) {
+                        showWinDialog = true
+                        AppAudio.playWin()
+                    }
+                }
+            }
+            activeMinigame = null
+            activeQuestId = null
+        }
+
+        // --- OVERLAY MINIGIOCHI ---
         when (activeMinigame) {
             QuestType.CAMERA -> {
                 MinigameShake(
-                    onDismiss = { activeMinigame = null },
-                    onWin = {
-                        activeMinigame = null
-                        collectedKeys = (collectedKeys + 1).coerceAtMost(3)
-                        if (activeQuestId != null) {
-                            completed = completed + activeQuestId!!
-                            activeQuestId = null
-                        }
-                    }
+                    onDismiss = { activeMinigame = null; activeQuestId = null },
+                    onWin = { handleWin() }
                 )
             }
             QuestType.GYRO -> {
                 MinigameGyro(
-                    onDismiss = { activeMinigame = null },
-                    onWin = {
-                        activeMinigame = null
-                        collectedKeys = (collectedKeys + 1).coerceAtMost(3)
-                        if (activeQuestId != null) {
-                            completed = completed + activeQuestId!!
-                            activeQuestId = null
-                        }
-                    },
-                    avatarResId = resId
+                    onDismiss = { activeMinigame = null; activeQuestId = null },
+                    onWin = { handleWin() },
+                    avatarResId = R.drawable.av_fox
                 )
             }
             QuestType.LIGHT -> {
                 MinigameCompass(
-                    onDismiss = { activeMinigame = null },
-                    onWin = {
-                        activeMinigame = null
-                        collectedKeys = (collectedKeys + 1).coerceAtMost(3)
-                        if (activeQuestId != null) {
-                            completed = completed + activeQuestId!!
-                            activeQuestId = null
-                        }
-                    }
+                    onDismiss = { activeMinigame = null; activeQuestId = null },
+                    onWin = { handleWin() }
                 )
             }
-            null -> { /* Nessun minigioco attivo */ }
+            null -> { }
         }
     }
 
-    // --- DIALOGHI AGGIORNATI CON STILE ---
+    // --- DIALOGHI ---
     if (showIntroDialog && collectedKeys == 0) {
         ForestDialog(
             title = "Benvenuto!",
             text = "Il tuo amico Orso è stato catturato!\n\nCompleta le 3 missioni dei Saggi per ottenere le Chiavi Magiche e liberarlo.",
             onDismiss = { showIntroDialog = false },
             confirmText = "Inizia!",
-            confirmAction = { showIntroDialog = false }
+            confirmAction = { showIntroDialog = false; AppAudio.playClick() }
         )
     }
 
     val sq = selectedQuest
     if (sq != null) {
-        val done = sq.id in completed
-        if (!done) {
-            ForestDialog(
-                title = sq.title,
-                text = sq.description,
-                onDismiss = { selectedQuest = null },
-                confirmText = "Gioca",
-                confirmAction = {
-                    activeQuestId = sq.id
-                    activeMinigame = sq.type
-                    selectedQuest = null
-                },
-                dismissText = "Annulla",
-                dismissAction = { selectedQuest = null }
-            )
-        }
+        ForestDialog(
+            title = sq.title,
+            text = sq.description,
+            onDismiss = { selectedQuest = null },
+            confirmText = "Gioca",
+            confirmAction = {
+                activeQuestId = sq.id
+                activeMinigame = sq.type
+                selectedQuest = null
+                AppAudio.playClick()
+            },
+            dismissText = "Annulla",
+            dismissAction = { selectedQuest = null }
+        )
     }
 
     if (showWinDialog) {
         ForestDialog(
             title = "L'ORSO È LIBERO!",
             text = "Hai raccolto tutte le 3 chiavi!\nLa gabbia si è aperta e il tuo amico è salvo grazie a te.",
-            onDismiss = { }, // Bloccato
+            onDismiss = { },
             confirmText = "Torna al Menu",
             confirmAction = onLeave,
             dismissText = "Resta qui",
@@ -555,125 +640,14 @@ fun GameScreen(
             confirmAction = { showBearDialog = false }
         )
     }
-}
 
-// --- NUOVI COMPONENTI GRAFICI ---
-
-@Composable
-fun ForestDialog(
-    title: String,
-    text: String,
-    onDismiss: () -> Unit,
-    confirmText: String,
-    confirmAction: () -> Unit,
-    dismissText: String? = null,
-    dismissAction: (() -> Unit)? = null
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Sfondo Cartello (sign_large)
-            Image(
-                painter = painterResource(id = R.drawable.sign_large),
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier
-                    .width(350.dp)
-                    .height(280.dp) // Altezza fissa per coerenza
-            )
-
-            // Contenuto Testo e Bottoni
-            // Contenuto Testo e Bottoni
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .width(300.dp)
-                    .padding(16.dp)
-            ) {
-                // --- TITOLO (Stile RPG: Oro con Ombra) ---
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 35.sp,
-                        shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.6f), // Ombra scura
-                            offset = Offset(2f, 2f), // Spostata leggermente
-                            blurRadius = 2f // Sfocatura
-                        )
-                    ),
-                    fontWeight = FontWeight.ExtraBold, // Molto spesso
-                    color = Color(0xFFFFE082), // COLORE ORO CHIARO (Molto carino sul legno)
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // --- TESTO CORPO (Bianco Panna con leggera ombra) ---
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyLarge.copy( // Uso bodyLarge per grandezza
-                        fontSize = 20.sp,
-                        shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.5f),
-                            offset = Offset(1f, 1f),
-                            blurRadius = 1f
-                        )
-                    ),
-                    color = Color(0xFFFFF8E1), // BIANCO PANNA (Meno stancante del bianco puro)
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Bottoni (Restano uguali)
-                Row(
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (dismissText != null && dismissAction != null) {
-                        ForestButton(text = dismissText, onClick = dismissAction, modifier = Modifier.width(110.dp), fontSize = 14.sp)
-                    }
-
-                    ForestButton(text = confirmText, onClick = confirmAction, modifier = Modifier.width(110.dp), fontSize = 14.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ForestButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    fontSize: androidx.compose.ui.unit.TextUnit = 16.sp
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .height(50.dp)
-            .clickable { onClick() }
-    ) {
-        // Sfondo Asse di Legno (plank_wide_left)
-        Image(
-            painter = painterResource(id = R.drawable.plank_wide_left),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize()
-        )
-        // Testo Bottone
-        Text(
-            text = text,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = fontSize,
-            style = MaterialTheme.typography.labelLarge
+    if (showAlreadyCollectedDialog) {
+        ForestDialog(
+            title = "Già Completata!",
+            text = "Questa chiave è già stata raccolta da un altro giocatore!\nNon ne riceverai un'altra.",
+            onDismiss = { showAlreadyCollectedDialog = false },
+            confirmText = "Ok, capito",
+            confirmAction = { showAlreadyCollectedDialog = false }
         )
     }
 }

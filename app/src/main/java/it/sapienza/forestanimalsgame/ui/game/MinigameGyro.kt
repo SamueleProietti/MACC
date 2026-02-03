@@ -53,7 +53,6 @@ fun MinigameGyro(
 
     // 3. Game Loop
     LaunchedEffect(isRunning) {
-        // VELOCITÀ RIDOTTA: 0.004 (Era 0.005/0.008)
         val baseSpeed = 0.004f
 
         while (isRunning) {
@@ -64,7 +63,6 @@ fun MinigameGyro(
                 showWinDialog = true
             }
 
-            // SPAWN ROCCE RIDOTTO: 0.02 (Meno frequenti)
             if (Random.nextFloat() < 0.02f) {
                 obstacles.add(Pair(Random.nextFloat(), -0.1f))
             }
@@ -159,7 +157,7 @@ fun MinigameGyro(
                     .rotate(-sensorX * 2)
             )
 
-            // 4. HUD (In alto, con padding status bar)
+            // 4. HUD
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -189,14 +187,14 @@ fun MinigameGyro(
                 )
             }
 
-            // 5. TASTO ARRENDITI (Responsive Fix)
+            // 5. TASTO ARRENDITI
             if (isRunning) {
                 OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .navigationBarsPadding() // 1. Spinge sopra la barra di sistema
-                        .padding(bottom = 50.dp), // 2. Aggiunge margine extra visivo
+                        .navigationBarsPadding()
+                        .padding(bottom = 50.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = Color.White.copy(alpha=0.8f),
                         contentColor = Color.Black
@@ -255,11 +253,9 @@ fun ScrollingRoad(resId: Int) {
         val tileH = imgBitmap.height
         val rows = (size.height / tileH).toInt() + 2
 
-        // FIX GAP ALTO: Parte da -2 per avere un buffer di tile sopra lo schermo
         for (r in -2..rows + 1) {
             val y = (r * tileH) + offset
 
-            // Disegna l'immagine stretchata per coprire tutta la larghezza (tileW)
             drawImage(
                 image = imgBitmap,
                 dstOffset = IntOffset(0, y.toInt()),

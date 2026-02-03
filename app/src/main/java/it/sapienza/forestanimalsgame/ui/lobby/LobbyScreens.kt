@@ -171,7 +171,6 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
     }
 }
 
-// ... MembersCard e ChatBubble rimangono uguali ...
 @Composable
 private fun MembersCard(session: Session?) {
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha=0.5f))) {
