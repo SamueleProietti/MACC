@@ -89,7 +89,7 @@ class LobbyViewModel(
                     attachToSession(sid)
                 }
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Errore resume sessione"
+                _error.value = e.localizedMessage ?: "Session resume error"
             } finally {
                 _loading.value = false
             }
@@ -98,7 +98,7 @@ class LobbyViewModel(
 
     fun createSession() {
         val uid = currentUid()
-        if (uid == null) { _error.value = "Utente non autenticato"; return }
+        if (uid == null) { _error.value = "User not authenticated"; return }
 
         viewModelScope.launch {
             _loading.value = true
@@ -107,7 +107,7 @@ class LobbyViewModel(
                 val id = repo.createSession(uid, currentName(), _avatarId.value ?: "fox")
                 attachToSession(id)
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Errore creazione sessione"
+                _error.value = e.localizedMessage ?: "Session creation error"
             } finally {
                 _loading.value = false
             }
@@ -116,8 +116,8 @@ class LobbyViewModel(
 
     fun joinSession(id: String) {
         val uid = currentUid()
-        if (uid == null) { _error.value = "Utente non autenticato"; return }
-        if (id.isBlank()) { _error.value = "Inserisci un codice valido"; return }
+        if (uid == null) { _error.value = "User not authenticated"; return }
+        if (id.isBlank()) { _error.value = "Insert a valid code"; return }
 
         viewModelScope.launch {
             _loading.value = true

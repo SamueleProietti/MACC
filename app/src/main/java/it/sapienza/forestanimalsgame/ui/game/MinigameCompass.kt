@@ -156,14 +156,14 @@ fun MinigameCompass(
                     Text(text = "$timeLeft s", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 }
 
-                Text("La Nebbia Magica", style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Magic Fog", style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (stage < 3) {
-                    Text("Ruota il telefono verso:", color = Color.LightGray, style = MaterialTheme.typography.bodyLarge)
+                    Text("Rotate your phone towards:", color = Color.LightGray, style = MaterialTheme.typography.bodyLarge)
                     Text(targetName, color = Color(0xFF64B5F6), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(vertical = 16.dp))
                 } else {
-                    Text("Nebbia Diradata!", color = Color.Green, style = MaterialTheme.typography.titleLarge)
+                    Text("Clearing Fog!", color = Color.Green, style = MaterialTheme.typography.titleLarge)
                 }
 
                 // BUSSOLA
@@ -207,19 +207,19 @@ fun MinigameCompass(
     if (showWinDialog) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("🌟 Orientamento Perfetto!") },
-            text = { Text("Hai seguito gli spiriti e la nebbia è svanita.\n\n+1 Chiave ottenuta.") },
-            confirmButton = { Button(onClick = { showWinDialog = false; onWin() }) { Text("Raccogli Chiave") } }
+            title = { Text("Perfect Orientation!") },
+            text = { Text("You followed the spirits and the fog has cleared.\n\n+1 Key obtained.") },
+            confirmButton = { Button(onClick = { showWinDialog = false; onWin() }) { Text("Collect Key") } }
         )
     }
 
     if (showTimeoutDialog) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("⌛ Tempo Scaduto!") },
-            text = { Text("La nebbia ti ha avvolto.") },
+            title = { Text("Time's Up!") },
+            text = { Text("The fog has enveloped you.") },
             confirmButton = { Button(onClick = { timeLeft = 20; stage = 0; holdProgress = 0f; showTimeoutDialog = false; isRunning = true }) { Text("Riprova") } },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Esci") } }
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Exit") } }
         )
     }
 }

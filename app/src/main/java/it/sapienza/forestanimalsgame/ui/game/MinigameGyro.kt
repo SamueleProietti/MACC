@@ -199,7 +199,7 @@ fun MinigameGyro(
                         containerColor = Color.White.copy(alpha=0.8f),
                         contentColor = Color.Black
                     )
-                ) { Text("Arrenditi") }
+                ) { Text("Give Up (Exit)") }
             }
         }
     }
@@ -208,24 +208,24 @@ fun MinigameGyro(
     if (showLoseDialog) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("💥 Ti sei schiantato!") },
-            text = { Text("Hai colpito troppe rocce.\nDevi ricominciare il percorso.") },
+            title = { Text("You crashed!") },
+            text = { Text("You hit too many rocks. You must restart the game.") },
             confirmButton = {
                 Button(onClick = {
                     lives = 3; progress = 0f; obstacles.clear(); playerPos = 0.5f; showLoseDialog = false; isRunning = true
-                }) { Text("Riprova") }
+                }) { Text("Retry") }
             },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Esci") } }
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Exit") } }
         )
     }
 
     if (showWinDialog) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("🏆 Percorso Completato!") },
-            text = { Text("Sei arrivato alla fine del sentiero!\n\n+1 Chiave ottenuta.") },
+            title = { Text("Path Completed!") },
+            text = { Text("You've reached the end of the path!\n\n+1 Key obtained.") },
             confirmButton = {
-                Button(onClick = { showWinDialog = false; onWin() }) { Text("Raccogli Chiave") }
+                Button(onClick = { showWinDialog = false; onWin() }) { Text("Collect Key") }
             }
         )
     }

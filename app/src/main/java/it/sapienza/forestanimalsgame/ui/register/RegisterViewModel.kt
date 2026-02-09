@@ -91,14 +91,14 @@ class RegisterViewModel(
 
         // 1. Controllo Posizione
         if (loc == null) {
-            _error.value = "Posizione non disponibile. Clicca su Aggiorna posizione."
+            _error.value = "Location unavailable. Click on Update Location."
             return
         }
 
         // 2. Controllo Foto (Obbligatoria!)
         // Deve esserci o una nuova foto (bitmap) o una vecchia già salvata (currentUrl)
         if (bitmap == null && currentUrl.isNullOrBlank()) {
-            _error.value = "Devi scattare una foto per completare il profilo!"
+            _error.value = "You must take a picture in order to complete the profile!"
             return
         }
 
@@ -122,7 +122,7 @@ class RegisterViewModel(
                 _done.value = true
 
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Errore salvataggio profilo"
+                _error.value = e.localizedMessage ?: "Profile saving Error"
             } finally {
                 _loading.value = false
             }

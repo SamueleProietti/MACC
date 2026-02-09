@@ -62,8 +62,8 @@ class MainActivity : ComponentActivity() {
                     if (showProfileAlert) {
                         AlertDialog(
                             onDismissRequest = { showProfileAlert = false },
-                            title = { Text("Profilo Incompleto") },
-                            text = { Text("Per entrare in Lobby devi prima completare il profilo (Posizione e Foto).") },
+                            title = { Text("Incomplete profile") },
+                            text = { Text("To enter the Lobby you must first complete your profile (Location and Photo).") },
                             confirmButton = {
                                 TextButton(onClick = {
                                     showProfileAlert = false
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
                                 }) { Text("Vai al Profilo") }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showProfileAlert = false }) { Text("Annulla") }
+                                TextButton(onClick = { showProfileAlert = false }) { Text("Cancel") }
                             }
                         )
                     }
@@ -170,7 +170,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Benvenuto,", style = MaterialTheme.typography.headlineSmall.merge(ForestTextStyle))
+            Text("Welcome,", style = MaterialTheme.typography.headlineSmall.merge(ForestTextStyle))
             Text(
                 text = user.displayName ?: "Viaggiatore",
                 style = MaterialTheme.typography.headlineMedium.merge(ForestTextStyle),
@@ -178,9 +178,9 @@ fun HomeScreen(
             )
 
             Spacer(Modifier.height(48.dp))
-            ForestButton(text = "Profilo", onClick = onCompleteProfile, modifier = Modifier.fillMaxWidth(0.8f))
+            ForestButton(text = "Profile", onClick = onCompleteProfile, modifier = Modifier.fillMaxWidth(0.8f))
             Spacer(Modifier.height(16.dp))
-            ForestButton(text = "Gioca (Lobby)", onClick = onOpenLobby, modifier = Modifier.fillMaxWidth(0.8f))
+            ForestButton(text = "Play (Lobby)", onClick = onOpenLobby, modifier = Modifier.fillMaxWidth(0.8f))
             Spacer(Modifier.height(32.dp))
             ForestButton(text = "Logout", onClick = onLogout, modifier = Modifier.fillMaxWidth(0.6f))
         }
@@ -212,7 +212,7 @@ fun LoginScreen(
             }
 
             ForestButton(
-                text = "Entra con Google",
+                text = "Enter with Google",
                 onClick = onSignInClick,
                 modifier = Modifier.fillMaxWidth(0.8f)
             )

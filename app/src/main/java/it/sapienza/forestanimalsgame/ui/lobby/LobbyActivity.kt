@@ -80,7 +80,7 @@ class LobbyActivity : ComponentActivity() {
                                         CircularProgressIndicator(color = Color(0xFFFFD54F))
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            "Caricamento partita...",
+                                            "Loading game...",
                                             style = ForestTextStyle,
                                             modifier = Modifier.padding(top = 60.dp)
                                         )

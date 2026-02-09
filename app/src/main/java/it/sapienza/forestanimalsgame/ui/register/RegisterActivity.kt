@@ -108,7 +108,7 @@ fun RegisterScreen(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Profilo Giocatore", style = MaterialTheme.typography.headlineMedium.merge(ForestTextStyle))
+                Text("Player Profile", style = MaterialTheme.typography.headlineMedium.merge(ForestTextStyle))
                 Spacer(Modifier.height(24.dp))
 
                 // --- POSIZIONE (Senza box nero, con coordinate) ---
@@ -125,7 +125,7 @@ fun RegisterScreen(
                     )
                 } else {
                     Text(
-                        text = "Posizione mancante",
+                        text = "Missing Location",
                         style = ForestTextStyle,
                         color = Color.Red
                     )
@@ -133,7 +133,7 @@ fun RegisterScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                ForestButton(text = "Aggiorna Posizione", onClick = onRefreshLocation, modifier = Modifier.width(200.dp).height(45.dp))
+                ForestButton(text = "Update Location", onClick = onRefreshLocation, modifier = Modifier.width(200.dp).height(45.dp))
 
                 Spacer(Modifier.height(24.dp))
 
@@ -152,12 +152,12 @@ fun RegisterScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
-                ForestButton(text = "Scatta Foto", onClick = onTakePhoto, modifier = Modifier.width(200.dp).height(45.dp))
+                ForestButton(text = "Take Photo", onClick = onTakePhoto, modifier = Modifier.width(200.dp).height(45.dp))
 
                 Spacer(Modifier.height(32.dp))
 
                 // --- AVATAR ---
-                Text("Scegli il tuo Avatar:", style = ForestTextStyle)
+                Text("Choose your Avatar:", style = ForestTextStyle)
                 Spacer(Modifier.height(12.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -176,7 +176,7 @@ fun RegisterScreen(
                 Spacer(Modifier.height(40.dp))
 
                 ForestButton(
-                    text = "SALVA PROFILO",
+                    text = "SAVE PROFILE",
                     onClick = onRegister,
                     enabled = !loading,
                     modifier = Modifier.fillMaxWidth()

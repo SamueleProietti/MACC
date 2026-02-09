@@ -48,7 +48,7 @@ fun LobbyEntryScreen(viewModel: LobbyViewModel) {
             OutlinedTextField(
                 value = code,
                 onValueChange = { code = it },
-                label = { Text("Codice sessione", color = Color.White) },
+                label = { Text("Session Code", color = Color.White) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -60,8 +60,8 @@ fun LobbyEntryScreen(viewModel: LobbyViewModel) {
             )
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ForestButton(text = "Crea sessione", onClick = { viewModel.createSession() }, enabled = !loading, modifier = Modifier.weight(1f))
-                ForestButton(text = "Entra", onClick = { viewModel.joinSession(code) }, enabled = !loading, modifier = Modifier.weight(1f))
+                ForestButton(text = "Create session", onClick = { viewModel.createSession() }, enabled = !loading, modifier = Modifier.weight(1f))
+                ForestButton(text = "Join", onClick = { viewModel.joinSession(code) }, enabled = !loading, modifier = Modifier.weight(1f))
             }
 
             if (loading) CircularProgressIndicator(color = Color(0xFFFFD54F))
@@ -100,20 +100,20 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Codice Sessione:", style = ForestTextStyle, fontSize = 14.sp)
+                        Text("Session Code:", style = ForestTextStyle, fontSize = 14.sp)
                         Text(sessionId, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
 
                     // TASTO CONDIVIDI (SHARE SHEET)
                     ForestButton(
-                        text = "Condividi", // Era "Copia"
+                        text = "Share", // Era "Copia"
                         onClick = {
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, "Gioca con me a Forest Animals! Codice: $sessionId")
+                                putExtra(Intent.EXTRA_TEXT, "Play with me on Forest Quest! Code: $sessionId")
                                 type = "text/plain"
                             }
-                            val shareIntent = Intent.createChooser(sendIntent, "Invita amici")
+                            val shareIntent = Intent.createChooser(sendIntent, "Invite friends")
                             context.startActivity(shareIntent)
                         },
                         modifier = Modifier.width(100.dp).height(40.dp),
@@ -123,7 +123,7 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
                     Spacer(modifier = Modifier.width(8.dp))
 
                     ForestButton(
-                        text = "Esci",
+                        text = "Exit",
                         onClick = { viewModel.leaveSession() },
                         modifier = Modifier.width(70.dp).height(40.dp),
                         fontSize = 12.sp
@@ -140,7 +140,7 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
             ) {
                 if (messages.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Nessun messaggio", color = Color.DarkGray)
+                        Text("No messages", color = Color.DarkGray)
                     }
                 } else {
                     LazyColumn(
@@ -156,15 +156,15 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
                 OutlinedTextField(
                     value = messageText,
                     onValueChange = { messageText = it },
-                    label = { Text("Messaggio", color = Color.White) },
+                    label = { Text("Message", color = Color.White) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFFFD54F), unfocusedBorderColor = Color.White)
                 )
-                ForestButton(text = "Invia", onClick = { viewModel.sendMessage(messageText); messageText = "" }, enabled = messageText.isNotBlank(), modifier = Modifier.width(80.dp))
+                ForestButton(text = "Send", onClick = { viewModel.sendMessage(messageText); messageText = "" }, enabled = messageText.isNotBlank(), modifier = Modifier.width(80.dp))
             }
 
-            ForestButton(text = if (isHost) "START GAME" else "Attendi l'Host...", onClick = { viewModel.startGameIfHost() }, enabled = canStart, modifier = Modifier.fillMaxWidth())
+            ForestButton(text = if (isHost) "START GAME" else "Wait for the Host...", onClick = { viewModel.startGameIfHost() }, enabled = canStart, modifier = Modifier.fillMaxWidth())
 
             if (!error.isNullOrBlank()) Text(text = error!!, color = Color.Red, modifier = Modifier.background(Color.White).padding(4.dp))
         }
@@ -175,8 +175,8 @@ fun LobbyScreen(viewModel: LobbyViewModel, sessionId: String) {
 private fun MembersCard(session: Session?) {
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha=0.5f))) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Membri (${session?.members?.size ?: 0}/4)", style = ForestTextStyle)
-            session?.members?.forEach { m -> Text("• ${m.displayName} (${m.avatar})", color = Color.White) } ?: Text("In attesa...", color = Color.LightGray)
+            Text("Members (${session?.members?.size ?: 0}/4)", style = ForestTextStyle)
+            session?.members?.forEach { m -> Text("• ${m.displayName} (${m.avatar})", color = Color.White) } ?: Text("Waiting...", color = Color.LightGray)
         }
     }
 }

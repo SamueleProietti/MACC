@@ -200,9 +200,9 @@ fun GameScreen(
 
     val questSpots = remember {
         listOf(
-            QuestSpot("q_light", "La Bussola Magica", "Trova il Nord per diradare la nebbia", QuestType.LIGHT, Offset(600f, 600f)),
-            QuestSpot("q_gyro", "Il Sentiero Tortuoso", "Guida l'animale inclinando il telefono", QuestType.GYRO, Offset(1500f, 800f)),
-            QuestSpot("q_accel", "L'Albero Antico", "Scuoti l'albero per far cadere la chiave", QuestType.CAMERA, Offset(1000f, 2000f))
+            QuestSpot("q_light", "The Magic Compass", "Find the North to clear the fog", QuestType.LIGHT, Offset(600f, 600f)),
+            QuestSpot("q_gyro", "The Winding Path", "Guide the animal by tilting your phone", QuestType.GYRO, Offset(1500f, 800f)),
+            QuestSpot("q_accel", "The Ancient Tree", "Shake the tree to make the key fall out", QuestType.CAMERA, Offset(1000f, 2000f))
         )
     }
 
@@ -592,7 +592,7 @@ fun GameScreen(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 ForestButton(text = "Reset", onClick = { avatar = spawn; target = spawn }, modifier = Modifier.width(100.dp))
                 ForestButton(text = "Menu", onClick = { (context as? android.app.Activity)?.onBackPressed() }, modifier = Modifier.width(100.dp))
-                ForestButton(text = "Esci", onClick = onLeave, modifier = Modifier.width(100.dp))
+                ForestButton(text = "Exit", onClick = onLeave, modifier = Modifier.width(100.dp))
             }
         }
 
@@ -645,10 +645,10 @@ fun GameScreen(
     // --- DIALOGHI ---
     if (showIntroDialog && collectedKeys == 0) {
         ForestDialog(
-            title = "Benvenuto!",
-            text = "Il tuo amico Orso è stato catturato!\n\nCompleta le 3 missioni dei Saggi per ottenere le Chiavi Magiche e liberarlo.",
+            title = "Welcome!",
+            text = "Your friend Bear has been captured!\n\nComplete the 3 Sages' quests to obtain the Magic Keys and free him.",
             onDismiss = { showIntroDialog = false },
-            confirmText = "Inizia!",
+            confirmText = "Start!",
             confirmAction = { showIntroDialog = false; AppAudio.playClick() }
         )
     }
@@ -659,34 +659,34 @@ fun GameScreen(
             title = sq.title,
             text = sq.description,
             onDismiss = { selectedQuest = null },
-            confirmText = "Gioca",
+            confirmText = "Play",
             confirmAction = {
                 activeQuestId = sq.id
                 activeMinigame = sq.type
                 selectedQuest = null
                 AppAudio.playClick()
             },
-            dismissText = "Annulla",
+            dismissText = "Cancel",
             dismissAction = { selectedQuest = null }
         )
     }
 
     if (showWinDialog) {
         ForestDialog(
-            title = "L'ORSO È LIBERO!",
-            text = "Hai raccolto tutte le 3 chiavi!\nLa gabbia si è aperta e il tuo amico è salvo grazie a te.",
+            title = "THE BEAR IS FREE!",
+            text = "You have collected all 3 keys! The cage has opened and your friend is safe thanks to you.",
             onDismiss = { },
-            confirmText = "Torna al Menu",
+            confirmText = "Back to the Menu",
             confirmAction = onLeave,
-            dismissText = "Resta qui",
+            dismissText = "Stay here",
             dismissAction = { showWinDialog = false }
         )
     }
 
     if (showCageDialog) {
         ForestDialog(
-            title = "Gabbia Chiusa",
-            text = "Ti servono 3 Chiavi per aprirla.\nNe hai raccolte ${collectedKeys}/3.",
+            title = "Closed Cage",
+            text = "You need 3 Keys to open it.\nYou have collected ${collectedKeys}/3.",
             onDismiss = { showCageDialog = false },
             confirmText = "Ok",
             confirmAction = { showCageDialog = false }
@@ -695,20 +695,20 @@ fun GameScreen(
 
     if (showBearDialog) {
         ForestDialog(
-            title = "Grazie Amico!",
-            text = "Mi hai salvato! Non dimenticherò mai il tuo aiuto.\nLa foresta è un posto migliore grazie a te.",
+            title = "Thanks Friend!",
+            text = "You saved me! I will never forget your help. The forest is a better place because of you.",
             onDismiss = { showBearDialog = false },
-            confirmText = "Prego!",
+            confirmText = "Yes!",
             confirmAction = { showBearDialog = false }
         )
     }
 
     if (showAlreadyCollectedDialog) {
         ForestDialog(
-            title = "Già Completata!",
-            text = "Questa chiave è già stata raccolta da un altro giocatore!\nNon ne riceverai un'altra.",
+            title = "Already Completed!",
+            text = "This key has already been collected by another player!\nYou will not receive another.",
             onDismiss = { showAlreadyCollectedDialog = false },
-            confirmText = "Ok, capito",
+            confirmText = "Ok, got it",
             confirmAction = { showAlreadyCollectedDialog = false }
         )
     }

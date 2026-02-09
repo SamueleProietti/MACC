@@ -103,13 +103,13 @@ fun MinigameShake(
                 }
 
                 Text(
-                    text = "L'Albero Antico",
+                    text = "The Ancient Tree",
                     style = MaterialTheme.typography.headlineMedium,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Scuoti forte il telefono!",
+                    text = "Shake your phone hard!",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.LightGray,
                     textAlign = TextAlign.Center,
@@ -118,7 +118,7 @@ fun MinigameShake(
 
                 Image(
                     painter = painterResource(id = R.drawable.tree),
-                    contentDescription = "Albero",
+                    contentDescription = "Tree",
                     modifier = Modifier
                         .size(250.dp)
                         .rotate(shakeAnim)
@@ -150,7 +150,7 @@ fun MinigameShake(
                         onClick = onDismiss,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                     ) {
-                        Text("Arrenditi (Esci)")
+                        Text("Give Up (Exit)")
                     }
                 }
             }
@@ -161,14 +161,14 @@ fun MinigameShake(
     if (showSuccessDialog) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("🌳 Missione Compiuta!") },
-            text = { Text("Hai scosso l'albero con forza e la Chiave Magica è caduta!\n\n+1 Chiave aggiunta all'inventario.") },
+            title = { Text("🌳 Mission Accomplished!") },
+            text = { Text("You shook the tree forcefully and the Magic Key fell out!\n\n+1 Key added to inventory.") },
             confirmButton = {
                 Button(onClick = {
                     showSuccessDialog = false
                     onWin()
                 }) {
-                    Text("Raccogli Chiave")
+                    Text("Collect Key")
                 }
             }
         )
@@ -178,8 +178,8 @@ fun MinigameShake(
     if (showTimeoutDialog) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("⌛ Tempo Scaduto!") },
-            text = { Text("Non sei riuscito a far cadere la chiave in tempo.") },
+            title = { Text("Time's Up!") },
+            text = { Text("You didn't manage to drop the key in time.") },
             confirmButton = {
                 Button(onClick = {
                     // Reset
@@ -188,11 +188,11 @@ fun MinigameShake(
                     showTimeoutDialog = false
                     isRunning = true
                 }) {
-                    Text("Riprova")
+                    Text("Retry")
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Esci") }
+                TextButton(onClick = onDismiss) { Text("Exit") }
             }
         )
     }
