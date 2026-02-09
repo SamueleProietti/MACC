@@ -42,6 +42,8 @@ class LobbyActivity : ComponentActivity() {
                         lobbyViewModel.resumeMyActiveSession()
                     }
 
+                    // Osserva il meteo dal ViewModel
+                    val weatherCondition by lobbyViewModel.weatherCondition.observeAsState("clear")
                     val sessionId by lobbyViewModel.sessionId.observeAsState(null)
                     val session by lobbyViewModel.session.observeAsState(null)
                     val avatarId by lobbyViewModel.avatarId.observeAsState("fox")
@@ -53,6 +55,7 @@ class LobbyActivity : ComponentActivity() {
                     LaunchedEffect(sessionId, session?.status) {
                         if (!sessionId.isNullOrBlank() && session?.status == "IN_GAME") {
                             lobbyViewModel.loadMyGameState(sessionId!!)
+                            lobbyViewModel.loadRealWeather()
                         }
                     }
 
@@ -88,6 +91,7 @@ class LobbyActivity : ComponentActivity() {
                                     session = session,
                                     avatarId = avatarId,
                                     initialGameState = gameState,
+                                    currentWeather = weatherCondition,
                                     onAutoSave = { st -> lobbyViewModel.saveMyGameState(sessionId!!, st) },
                                     onStop = { state ->
                                         lifecycleScope.launch {

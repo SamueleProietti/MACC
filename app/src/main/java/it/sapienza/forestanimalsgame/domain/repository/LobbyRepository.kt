@@ -28,6 +28,9 @@ interface LobbyRepository {
     // Ascolta TUTTI gli stati dei giocatori nella sessione (per unire le chiavi raccolte)
     fun listenGameStates(sessionId: String, onUpdate: (List<GameState>) -> Unit): () -> Unit
 
+    //weather api
+    suspend fun fetchWeather(backendUrl: String, lat: Double, lng: Double): String
+
 }
 
 

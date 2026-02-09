@@ -10,6 +10,11 @@ import it.sapienza.forestanimalsgame.data.model.GameState
 import it.sapienza.forestanimalsgame.data.model.Member
 import it.sapienza.forestanimalsgame.data.model.Session
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 class LobbyRepositoryImpl(
@@ -271,4 +276,37 @@ class LobbyRepositoryImpl(
         }
     }
 
+    // ✅ IMPLEMENTAZIONE API METEO
+    override suspend fun fetchWeather(backendUrl: String, lat: Double, lng: Double): String {
+        return withContext(Dispatchers.IO) {
+            try {
+                // Costruiamo l'URL: es. https://tuo-url-gcp.run.app/v1/weather?lat=41.9&lng=12.5
+                val endpoint = "$backendUrl/v1/weather?lat=$lat&lng=$lng"
+                val url = URL(endpoint)
+
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000 // 5 secondi timeout
+
+                if (connection.responseCode == 200) {
+                    // Leggi la risposta JSON
+                    val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+
+                    Log.d("REPO_DEBUG_METEO", "JSON Meteo ricevuto: $responseText")
+
+                    val json = JSONObject(responseText)
+
+                    // Estrai la condizione ("rain", "snow", "clear", etc.)
+                    // Default a "clear" se c'è qualche problema nel parsing
+                    json.optString("condition", "clear")
+                } else {
+                    Log.e("REPO_DEBUG", "Errore API Meteo: ${connection.responseCode}")
+                    "clear" // Fallback in caso di errore server
+                }
+            } catch (e: Exception) {
+                Log.e("REPO_DEBUG", "Eccezione API Meteo: ${e.message}")
+                "clear" // Fallback in caso di assenza rete
+            }
+        }
+    }
 }

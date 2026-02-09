@@ -1,6 +1,7 @@
 package it.sapienza.forestanimalsgame.ui.game
 
 import android.util.Log
+import androidx.compose.material.icons.filled.WbCloudy
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -740,8 +741,10 @@ fun WeatherHUD(weather: String) {
             val (icon, color) = when (weather) {
                 "rain" -> Icons.Filled.WaterDrop to Color(0xFF4FC3F7)
                 "snow" -> Icons.Filled.AcUnit to Color.White
-                "clear" -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
-                else -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
+                //"clear" -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
+                "clear" -> Icons.Filled.WaterDrop to Color(0xFF4FC3F7)
+                "cloudy" -> Icons.Filled.WbCloudy to Color(0x808080)
+                else -> Icons.Filled.AcUnit to Color.White
             }
             Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
         }

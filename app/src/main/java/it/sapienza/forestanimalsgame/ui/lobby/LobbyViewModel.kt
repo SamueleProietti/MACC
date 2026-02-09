@@ -13,12 +13,14 @@ import it.sapienza.forestanimalsgame.data.repository.ProfileRepositoryImpl
 import it.sapienza.forestanimalsgame.domain.repository.LobbyRepository
 import it.sapienza.forestanimalsgame.domain.repository.ProfileRepository
 import kotlinx.coroutines.launch
+import android.util.Log
 
 class LobbyViewModel(
     private val repo: LobbyRepository = LobbyRepositoryImpl(),
     private val profileRepo: ProfileRepository = ProfileRepositoryImpl()
 ) : ViewModel() {
 
+    private val BACKEND_URL = "https://forestanimal-api-1002662831596.europe-west12.run.app"
     private val _sessionId = MutableLiveData<String?>(null)
     val sessionId: LiveData<String?> = _sessionId
 
@@ -43,6 +45,9 @@ class LobbyViewModel(
 
     private val _gameStateLoaded = MutableLiveData(false)
     val gameStateLoaded: LiveData<Boolean> = _gameStateLoaded
+
+    private val _weatherCondition = MutableLiveData("clear")
+    val weatherCondition: LiveData<String> = _weatherCondition
 
     private var removeSessionListener: (() -> Unit)? = null
     private var removeMessagesListener: (() -> Unit)? = null
@@ -226,6 +231,28 @@ class LobbyViewModel(
             } finally {
                 // Segnala che il caricamento è finito (con o senza dati)
                 _gameStateLoaded.value = true
+            }
+        }
+    }
+
+    fun loadRealWeather() {
+        viewModelScope.launch {
+            try {
+                // 1. Recupera la posizione dal profilo salvato su Firebase
+                val profile = profileRepo.getMyProfile()
+                val lat = profile.lat
+                val lng = profile.lng
+
+
+                if (lat != null && lng != null) {
+                    // 2. Chiama il tuo backend Python
+                    val condition = repo.fetchWeather(BACKEND_URL, lat, lng)
+                    _weatherCondition.postValue(condition)
+                } else {
+                    Log.d("VIEWMODEL", "Nessuna posizione nel profilo, uso meteo default")
+                }
+            } catch (e: Exception) {
+                Log.e("VIEWMODEL", "Errore caricamento meteo", e)
             }
         }
     }
