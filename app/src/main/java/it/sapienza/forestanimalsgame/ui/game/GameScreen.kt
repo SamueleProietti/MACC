@@ -3,6 +3,7 @@ package it.sapienza.forestanimalsgame.ui.game
 import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -53,7 +54,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.hypot
 
 // --- CONFIGURAZIONE ---
-const val DEBUG_MODE = true
+const val DEBUG_MODE = false
 const val AVATAR_SIZE_PX = 150f
 const val DRAW_OFFSET_Y = 15f
 const val FIXED_ZOOM = 1f
@@ -127,7 +128,7 @@ fun GameScreen(
     val infiniteTransition = rememberInfiniteTransition(label = "marker_anim")
     val markerBobY by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = -10f, 
+        targetValue = -10f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
@@ -204,8 +205,10 @@ fun GameScreen(
         )
     }
 
-    val testWeather by remember { mutableStateOf(currentWeather) }
-    val testNight by remember { mutableStateOf(isNightTime) }
+
+    var testWeather by remember { mutableStateOf(currentWeather) }
+    var testNight by remember { mutableStateOf(isNightTime) }
+
     val vividFilter = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.4f) }) }
 
     // HYDRATE INIZIALE
@@ -502,27 +505,83 @@ fun GameScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // TOP BAR
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TimeHUD(testNight)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+            ) {
+                // --- SINISTRA: Solo Debug (TimeHUD rimosso) ---
+                Column(
+                    modifier = Modifier.align(Alignment.TopStart),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     if (DEBUG_MODE) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha=0.7f))) {
-                            Column(modifier = Modifier.padding(8.dp)) {
+                            Column(modifier = Modifier.padding(12.dp)) {
                                 Text("Keys: $collectedKeys", color = Color.Green, fontSize = 12.sp)
                                 Text("List: ${completed.joinToString()}", color = Color.Yellow, fontSize = 10.sp)
                             }
                         }
                     }
                 }
-                KeysHUD(collectedKeys)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
-                    WeatherHUD(testWeather)
-                    Button(
-                        onClick = { },
-                        enabled = collectedKeys < 3,
-                        modifier = Modifier.height(35.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) { Text("+ Key", fontSize = 12.sp) }
+
+                // --- CENTRO: Chiavi ---
+                Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                    KeysHUD(collectedKeys)
+                }
+
+                // --- DESTRA: Bottoni Unificati ---
+                Column(
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    // Definiamo stile e dimensioni comuni
+                    val unifiedBackgroundColor = Color.Black.copy(alpha = 0.5f)
+                    val unifiedShape = RoundedCornerShape(24.dp)
+                    // Fissiamo larghezza e altezza uguali per entrambi
+                    val unifiedModifier = Modifier.width(72.dp).height(50.dp)
+                    val iconSize = 28.dp
+
+                    // 1. Bottone Meteo (Stile unificato)
+                    Card(
+                        shape = unifiedShape,
+                        colors = CardDefaults.cardColors(containerColor = unifiedBackgroundColor),
+                        modifier = unifiedModifier.clickable {
+                            testWeather = when (testWeather) {
+                                "clear" -> "rain"
+                                "rain" -> "snow"
+                                else -> "clear"
+                            }
+                        }
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            // Logica per scegliere l'icona del meteo
+                            val (icon, color) = when (testWeather) {
+                                "rain" -> Icons.Filled.WaterDrop to Color(0xFF4FC3F7)
+                                "snow" -> Icons.Filled.AcUnit to Color.White
+                                "clear" -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
+                                else -> Icons.Filled.WbSunny to Color(0xFFFFD54F)
+                            }
+                            Icon(imageVector = icon, contentDescription = "Weather", tint = color, modifier = Modifier.size(iconSize))
+                        }
+                    }
+
+                    // 2. Bottone Toggle Notte (Stile unificato)
+                    Card(
+                        shape = unifiedShape,
+                        colors = CardDefaults.cardColors(containerColor = unifiedBackgroundColor),
+                        modifier = unifiedModifier.clickable { testNight = !testNight }
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (testNight) Icons.Filled.WbSunny else Icons.Filled.Bedtime,
+                                contentDescription = "Toggle Time",
+                                tint = if (testNight) Color(0xFFFFD54F) else Color.White, // Icona gialla se è notte (per tornare al sole), bianca altrimenti
+                                modifier = Modifier.size(iconSize)
+                            )
+                        }
+                    }
                 }
             }
 

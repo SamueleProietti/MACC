@@ -70,11 +70,11 @@ class RegisterViewModel(
 
             } catch (e: Exception) {
                 if (e is HttpException && e.code() == 404) {
-
-                    println("Nuovo utente rilevato (404), mostro form vuoto.")
+                    println("")
+                    //println("Nuovo utente rilevato (404), mostro form vuoto.")
                 } else {
-
-                    _error.value = "Errore caricamento: ${e.localizedMessage}"
+                    _error.value = null
+                    //_error.value = "Errore caricamento: ${e.localizedMessage}"
                 }
             } finally {
 
